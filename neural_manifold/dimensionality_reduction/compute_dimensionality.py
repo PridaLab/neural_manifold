@@ -435,9 +435,7 @@ def dim_to_number_cells(input_signal, field_signal = None, n_neigh = 0.01, n_ste
         #define limit of variables used in sI if applicable
         varLimits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
         dim_dict['sI_val'] = np.zeros((n_steps,len(label_list),n_splits))
-        
-        dim_dict['R2s_base'] = np.zeros((n_steps,n_splits, 5, len(label_list),2))*np.nan
-        dim_dict['R2s_umap'] = np.zeros((n_steps,n_splits, 5, len(label_list),2))*np.nan
+        dim_dict["R2s"] = dict()
         
     if verbose:
         print('Checking number of cells idx X/X',end='', sep='')
@@ -485,7 +483,8 @@ def dim_to_number_cells(input_signal, field_signal = None, n_neigh = 0.01, n_ste
                                                                                       vmin= minVal, vmax = maxVal)
             #Check decoding in 3 dims
             if label_list:
-                dim_dict['R2s_base'][str(num_cells_idx)+'_'+str(split_idx)]  = decoders_1D(signal_new, input_label=label_list, emb_list = ["umap"], input_trial = trial_signal,
-                                       n_dims = 3, n_splits=5, decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False)
+                dim_dict["R2s"][str(num_cells_idx)+'_'+str(split_idx)] = decoders_1D(signal_new, input_label=label_list, 
+                                      emb_list = ["umap"], input_trial = trial_signal, n_dims = 3, n_splits=5, 
+                                      decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False)
      
     return dim_dict
