@@ -367,7 +367,7 @@ def compute_isomap_recerror_dim(input_object, field = None, n_neigh= 0.01, max_d
         return dim, rec_error
 
 
-def study_number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_steps = 15, input_label=None, 
+def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_steps = 15, input_label=None, 
                               field_label = None, min_cells = 5, n_splits = 5, verbose = True, field_trial = None):
     #check signal input
     if isinstance(input_signal, pd.DataFrame):
