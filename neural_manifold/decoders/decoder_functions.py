@@ -132,7 +132,6 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
             else:
                 print('\b\b\b \b\b\b',kfold_index+1, '/',n_splits,sep='', end='')
         if isinstance(trial_signal, np.ndarray):
-            breakpoint()
             #split into train and test data
             fold_split = np.copy(trial_list)
             np.random.shuffle(fold_split)
@@ -183,7 +182,7 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
     return R2s 
 
 
-def decoders_LT_dict(dict_df, field_signal = "ML_rates", emb_list=["ML_umap"], input_label = ["posx"],
+def decoders_1D_dict(dict_df, field_signal = "ML_rates", emb_list=["ML_umap"], input_label = ["posx"],
                      n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"],verbose = False):  
     
     R2s_dict = dict()

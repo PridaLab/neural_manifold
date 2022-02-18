@@ -22,6 +22,8 @@ import random
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu #translators (from Dataframe to np.ndarray)
 from neural_manifold import structure_index as sI 
+from neural_manifold.decoders import decoders_1D
+
 
 def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**5, verbose=False):
     '''Compute internal dimensionality of data array as described in: https://doi.org/10.1038/s41467-019-12724-2
@@ -367,8 +369,8 @@ def compute_isomap_recerror_dim(input_object, field = None, n_neigh= 0.01, max_d
         return dim, rec_error
 
 
-def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_steps = 15, input_label=None, 
-                              field_label = None, min_cells = 5, n_splits = 5, verbose = True, field_trial = None):
+def dim_to_number_cells(input_signal, field_signal = None, n_neigh = 0.01, n_steps = 15, input_label=None, 
+                            min_cells = 5, n_splits = 5, verbose = True, input_trial = None, cells_to_include = 'all'):
     #check signal input
     if isinstance(input_signal, pd.DataFrame):
         signal = gu.dataframe_to_1array_translator(input_signal,field_signal)
@@ -376,22 +378,37 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
         signal = copy.deepcopy(input_signal)
     else:
         raise ValueError("Input object has to be a dataframe or a numpy array.")
-    #check structure index input if applicable
+    #check label list input
     if isinstance(input_label, np.ndarray): #user inputs an independent array for sI
-            labels_list = list([copy.deepcopy(input_label)])
-    elif isinstance(field_label, str): #user specifies field_signal for sI but not a dataframe (then use input_signal)
-        labels_list = list([gu.dataframe_to_1array_translator(input_signal,field_label)])
-    elif isinstance(field_label, list):
-        labels_list = gu.dataframe_to_manyarray_translator(input_signal,field_label)
+            label_list = list([copy.deepcopy(input_label)])
+    elif isinstance(input_label, str): #user specifies field_signal
+        label_list = list([gu.dataframe_to_1array_translator(input_signal,input_label)])
+    elif isinstance(input_label, list):
+        if isinstance(input_label[0], str):
+            label_list = gu.dataframe_to_manyarray_translator(input_signal,input_label)
+        elif isinstance(input_label[0], np.ndarray):
+            label_list = copy.deepcopy(input_label)
+        else:
+            raise ValueError("If 'input_label' is a list, it must be composed of either strings " +
+                             "(referring to the columns of the input_signal dataframe), or arrays. " +
+                             "However it was %s" %type(input_label[0]))
     else:
-        labels_list = None #do not compute sI val nor decoding
+        raise ValueError(" 'input_label' must be either an array or a string (referring to the columns "+
+                         "of the input_signal dataframe) (or a list composed of those). However it was %s"
+                         %type(input_label))
     #Check if trial mat to use when spliting training/test for decoders
-    if isinstance(field_trial, np.ndarray): #user inputs an independent array for sI
-        trial_signal = copy.deepcopy(field_trial)
-    elif isinstance(field_label, str): #user specifies field_signal for sI but not a dataframe (then use input_signal)
-        trial_signal = gu.dataframe_to_1array_translator(input_signal,field_trial)
+    if isinstance(input_trial, np.ndarray): #user inputs an independent array for sI
+        trial_signal = copy.deepcopy(input_trial)
+    elif isinstance(input_trial, str): #user specifies field_signal for sI but not a dataframe (then use input_signal)
+        trial_signal = gu.dataframe_to_1array_translator(input_signal,input_trial)
     else:
         trial_signal = None 
+    #Check if specific cells to include
+    if isinstance(cells_to_include,str):
+        if 'all' in cells_to_include:
+            cells_to_include = np.arange(0, signal.shape[1],1)
+    elif isinstance(cells_to_include, type(None)):
+            cells_to_include = np.arange(0, signal.shape[1],1)
     #check number of neigh
     if n_neigh<1:
         if verbose:
@@ -400,7 +417,7 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
         if verbose:
             print("Resulting in %i neighbours." %(n_neigh))
     #get total number of cells
-    tnum_cells = signal.shape[1]
+    tnum_cells = len(cells_to_include)
     #get array with number of cells to include on each iteration
     num_cells = np.unique(np.logspace(np.log10(min_cells), np.log10(tnum_cells),n_steps,dtype=int))
     #initilize dictionary where all results will be saved
@@ -413,13 +430,14 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
     dim_dict['res_var'] = np.zeros((n_steps,2,n_splits))
     dim_dict['rec_error'] = np.zeros((n_steps,2,n_splits))
     dim_dict['n_neigh'] = n_neigh
-    if labels_list:
+
+    if label_list:
         #define limit of variables used in sI if applicable
-        varLimits = [(np.percentile(label,5), np.percentile(label,95)) for label in labels_list]
-        dim_dict['sI_val'] = np.zeros((n_steps,len(labels_list),n_splits))
-    if trial_signal:
-        trial_list = np.unique(trial_signal)
-        train_index = trial_list.shape[0]//2
+        varLimits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
+        dim_dict['sI_val'] = np.zeros((n_steps,len(label_list),n_splits))
+        
+        dim_dict['R2s_base'] = np.zeros((n_steps,n_splits, 5, len(label_list),2))*np.nan
+        dim_dict['R2s_umap'] = np.zeros((n_steps,n_splits, 5, len(label_list),2))*np.nan
         
     if verbose:
         print('Checking number of cells idx X/X',end='', sep='')
@@ -431,7 +449,7 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
             
         dim_dict['cells_picked'][str(num_cells_idx)] = np.zeros((num_cells_val,n_splits)).astype(int)
         for split_idx in range(n_splits):
-            cells_picked = random.sample(range(0, tnum_cells), num_cells_val)
+            cells_picked = random.sample(list(cells_to_include), num_cells_val)
             dim_dict['cells_picked'][str(num_cells_idx)][:,split_idx] = cells_picked
             signal_new = copy.deepcopy(signal[:, cells_picked])
             #1.CHECK INNER DIM
@@ -455,10 +473,10 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
             dim_dict['rec_error'][num_cells_idx,1,split_idx] = rec_error[dim-1,0]
             
             #CHECK sI index in 3 dims
-            if labels_list:
+            if label_list:
                 emb = umap.UMAP(n_neighbors = n_neigh, n_components = 3, min_dist=0.75).fit_transform(signal_new)
                 emb_space = np.linspace(0,3-1, 3).astype(int)              
-                for labels_idx, labels_values in enumerate(labels_list):
+                for labels_idx, labels_values in enumerate(label_list):
                     if labels_values.ndim>1:
                         labels_values = labels_values[:,0]
                     minVal, maxVal = varLimits[labels_idx]
@@ -466,6 +484,8 @@ def number_cells_to_dim(input_signal, field_signal = None, n_neigh = 0.01, n_ste
                                                                                       labels_values, 20, emb_space, 0,
                                                                                       vmin= minVal, vmax = maxVal)
             #Check decoding in 3 dims
-            #if labels_list:
-                
+            if label_list:
+                dim_dict['R2s_base'][str(num_cells_idx)+'_'+str(split_idx)]  = decoders_1D(signal_new, input_label=label_list, emb_list = ["umap"], input_trial = trial_signal,
+                                       n_dims = 3, n_splits=5, decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False)
+     
     return dim_dict
