@@ -29,4 +29,4 @@ def handle_input_dataframe_array(input_object, input_signal_1 = None, input_sign
         return copy.deepcopy(input_object)
     else:
         raise ValueError("Could not handle input. Input object was %s. Signal_1 was %s. Signal 2 was %s."
-                         %type(input_object), type(input_signal_1), type(input_signal_2))
+                         %(type(input_object), type(input_signal_1), type(input_signal_2)))

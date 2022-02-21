@@ -12,16 +12,14 @@ from sklearn.metrics import median_absolute_error
 import umap
 from sklearn.manifold import Isomap
 from sklearn.decomposition import PCA
-import pandas as pd
 
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu
 from neural_manifold.decoders.decoder_classes import DECODERS  #decoders classes
-from neural_manifold.dimensionality_reduction import reduce_dimensionality as rd #reduce dimensionality of DataFrame 
 
 import warnings as warnings
-warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-data warning for XGBoost: https://stackoverflow.com/questions/67225016/warning-occuring-in-xgboost
-
+warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-data warning for XGBoost: 
+                                                               #https://stackoverflow.com/questions/67225016/warning-occuring-in-xgboost
 
 def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = ["umap"], input_trial = None,
                        n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False):  
@@ -64,13 +62,7 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
         
     '''
     #check signal input
-    if isinstance(input_signal, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_signal,field_signal)
-    elif isinstance(input_signal,np.ndarray):
-        signal = copy.deepcopy(input_signal)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array. However it as %s"
-                         %type(input_signal))
+    signal = gu.handle_input_dataframe_array(input_signal, field_signal, first_array = True)
     #check label list input
     if isinstance(input_label, np.ndarray): #user inputs an independent array for sI
             label_list = list([copy.deepcopy(input_label)])
@@ -89,15 +81,13 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
         raise ValueError(" 'input_label' must be either an array or a string (referring to the columns "+
                          "of the input_signal dataframe) (or a list composed of those). However it was %s"
                          %type(input_label))
-    #Reshape label_list from column vectors to matrix
+    #Reshape label_list from column vectors to 1D-matrix
     for idx, y in enumerate(label_list):
         if y.ndim == 1:
             label_list[idx] = y.reshape(-1,1)
     #Check if trial mat to use when spliting training/test for decoders
-    if isinstance(input_trial, np.ndarray): #user inputs an independent array for sI
-        trial_signal = copy.deepcopy(input_trial)
-    elif isinstance(input_trial, str): #user specifies field_signal for sI but not a dataframe (then use input_signal)
-        trial_signal = gu.dataframe_to_1array_translator(input_signal,input_trial)
+    if not isinstance(input_trial, type(None)):
+        trial_signal = gu.handle_input_dataframe_array(input_signal, input_trial, first_array = False)
     else:
         trial_signal = None 
     if isinstance(trial_signal, np.ndarray):
@@ -176,8 +166,10 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
                 for decoder_name in decoder_list:
                     model_decoder = DECODERS[decoder_name]()
                     model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
-                    R2s[emb][decoder_name][kfold_index,y_idx,0] = median_absolute_error(Y_test[y_idx][:,0], model_decoder.predict(X_test[emb_idx])[:,0])
-                    R2s[emb][decoder_name][kfold_index,y_idx,1] = median_absolute_error(Y_train[y_idx][:,0], model_decoder.predict(X_train[emb_idx])[:,0])
+                    R2s[emb][decoder_name][kfold_index,y_idx,0] = median_absolute_error(Y_test[y_idx][:,0], 
+                                                                                model_decoder.predict(X_test[emb_idx])[:,0])
+                    R2s[emb][decoder_name][kfold_index,y_idx,1] = median_absolute_error(Y_train[y_idx][:,0], 
+                                                                                model_decoder.predict(X_train[emb_idx])[:,0])
                 
     return R2s 
 
