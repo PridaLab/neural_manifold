@@ -205,199 +205,218 @@ def decoders_1D_dict(dict_df, field_signal = "ML_rates", emb_list=["ML_umap"], i
             print("")
     return R2s_dict 
 
-
-
-def cross_session_decoders_LT(dict_df_A, dict_df_B, x_base = "ML_rates", x_emb="ML_umap", y_signal = "pos", n_dims = 3, n_splits=10, 
-                              decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False):  
-    
-    for file_A, pd_struct_A in dict_df_A.items():
-        if 'index_mat' not in pd_struct_A.columns:
-            pd_struct_A["index_mat"] = [np.zeros((pd_struct_A["pos"][idx].shape[0],1)).astype(int)+pd_struct_A["trial_id"][idx] 
-                                      for idx in range(pd_struct_A.shape[0])]
-    
-    for file_B, pd_struct_B in dict_df_B.items():
-        if 'index_mat' not in pd_struct_B.columns:
-            pd_struct_B["index_mat"] = [np.zeros((pd_struct_B["pos"][idx].shape[0],1)).astype(int)+pd_struct_B["trial_id"][idx] 
-                                      for idx in range(pd_struct_B.shape[0])]
-    
-    R2s = dict()
-    R2s[x_emb] = dict()
-    for decoder_name in decoder_list:
-        R2s[x_emb][decoder_name] = np.zeros((len(dict_df_A),len(dict_df_B),5, n_splits))*np.nan
-    
-    query = lambda trial, fold_split: np.any(trial['trial_id']==fold_split)
-    count_A = -1
-    for file_A, pd_struct_A in dict_df_A.items():
-        count_A += 1
-        count_B = -1
-        if verbose:
-            print('\nWorking on file: %s'%file_A, end = '')   
-        prefix_file_A = file_A[:file_A.find('_LT')]
+def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = None, field_signal_A = None, field_signal_B = None, 
+                              input_label = None, input_label_A = None, input_label_B = None, 
+                              input_trial = None, input_trial_A = None, input_trial_B= None, 
+                              input_direction = None, input_direction_A = None, input_direction_B = None,
+                              n_splits=10, n_neigh = 0.01, n_dims = 3, decoder_list = ["wf", "wc", "xgb", "svr"],verbose = True):
+    #check signal input A
+    if isinstance(field_signal_A, str) and isinstance(field_signal, str):
+        raise ValueError("Both field_signal and field_signal_A defined. Only specify one.")
+    signal_A = gu.handle_input_dataframe_array(input_signal_A, field_signal, field_signal_A, first_array = True)
+    #check signal input B
+    if isinstance(field_signal_B, str) and isinstance(field_signal, str):
+        raise ValueError("Both field_signal and field_signal_B defined. Only specify one.")
+    signal_B = gu.handle_input_dataframe_array(input_signal_B, field_signal, field_signal_B, first_array = True)
+    #check input label
+    if isinstance(input_label, str) and (isinstance(input_label_A, str) or isinstance(input_label_B, str)):
+        raise ValueError("Both input_label, and input_label_A/input_label_B defined. Only specify one")
+    else:
+        label_A = gu.handle_input_dataframe_array(input_signal_A, input_label, input_label_A, first_array = False)
+        label_B = gu.handle_input_dataframe_array(input_signal_B, input_label, input_label_B, first_array = False)
+    #Check if trial mat to use when spliting training/test
+    if isinstance(input_trial, str) and (isinstance(input_trial_A, str) or isinstance(input_trial_B, str)):
+        raise ValueError("Both input_trial, and input_trial_A/input_trial_B defined. Only specify one")
+    elif not isinstance(input_trial, type(None)) or not (isinstance(input_trial_A, type(None)) or 
+                                                         isinstance(input_trial_B, type(None))):
+        trial_signal_A = gu.handle_input_dataframe_array(input_signal_A, input_trial, input_trial_A, first_array = False)
+        trial_signal_B = gu.handle_input_dataframe_array(input_signal_B, input_trial, input_trial_B, first_array = False)
+    else:
+        trial_signal_A = None
+        trial_signal_B = None
+    #Program future train/test split accordingly
+    if isinstance(trial_signal_A , np.ndarray):
+        if trial_signal_A.ndim>1:
+            trial_signal_A = trial_signal_A[:,0]
+        trial_list_A = np.unique(trial_signal_A)
+        #train with half of trials
+        train_test_division_index_A = int(trial_list_A.shape[0]//1.25)
         
-        index_mat_A = copy.deepcopy(np.concatenate(pd_struct_A["index_mat"], axis = 0))
-        index_list_A = np.unique(index_mat_A)
-        train_index_A = int(index_list_A.shape[0]//1.25)
-
-        for file_B, pd_struct_B in dict_df_B.items():
-            count_B +=1
-            prefix_file_B = file_B[:file_B.find('_LT')]
-            if prefix_file_A != prefix_file_B:
-                if verbose:
-                    print('\n\tComparing it to: %s'%file_B, end = '')
-                index_mat_B = copy.deepcopy(np.concatenate(pd_struct_B["index_mat"], axis = 0))
-                index_list_B = np.unique(index_mat_B)
-                train_index_B = int(index_list_B.shape[0]//1.25)
-                if verbose:
-                    print('\tKfold: X/X',end='', sep='')
-                    pre_del = '\b\b\b'
-                for kfold in range(n_splits):
-                    if verbose:
-                        print(pre_del,"%d/%d" %(kfold+1,n_splits), sep = '', end='')
-                        pre_del = (len(str(kfold+1))+len(str(n_splits))+1)*'\b'
-                    #1.1divide session A into train and test
-                    fold_split_A = np.copy(index_list_A)
-                    np.random.shuffle(fold_split_A)
-                    pd_struct_A_train = copy.deepcopy(pd_struct_A.loc[[query(trial, fold_split_A[:train_index_A]) for (_, trial) in
-                                                                  pd_struct_A.iterrows()],:])
-                    pd_struct_A_test = copy.deepcopy(pd_struct_A.loc[[query(trial, fold_split_A[train_index_A:]) for (_, trial) in
-                                                                  pd_struct_A.iterrows()],:])
-                    pd_struct_A_train.reset_index()
-                    pd_struct_A_test.reset_index()
-                    #1.2divide session B into train and test
-                    fold_split_B = np.copy(index_list_B)
-                    np.random.shuffle(fold_split_B)
-                    pd_struct_B_train = copy.deepcopy(pd_struct_B.loc[[query(trial, fold_split_B[:train_index_B]) for (_, trial) in
-                                                                  pd_struct_B.iterrows()],:])
-                    pd_struct_B_test = copy.deepcopy(pd_struct_B.loc[[query(trial, fold_split_B[train_index_B:]) for (_, trial) in
-                                                                  pd_struct_B.iterrows()],:])
-                    pd_struct_B_train.reset_index()
-                    pd_struct_B_test.reset_index()
-                    
-                    #2.1compute umap embedding on train A and project test A
-                    n_neighbours_A = np.round(np.concatenate(pd_struct_A_train[x_base].values, axis=0).shape[0]*0.01).astype(int)
-                    pd_struct_A_train, model_umap_A = rd.dim_reduce(pd_struct_A_train, umap.UMAP(n_neighbors = n_neighbours_A, 
-                                                                             n_components = n_dims, min_dist=0.75), 
-                                                                              x_base, x_emb, return_model = True)
-                    pd_struct_A_test = rd.apply_dim_reduce_model(pd_struct_A_test, model_umap_A, x_base, x_emb)
-                    
-                    #2.2compute umap embedding on train B and project test B
-                    n_neighbours_B = np.round(np.concatenate(pd_struct_B_train[x_base].values, axis=0).shape[0]*0.01).astype(int)
-                    pd_struct_B_train, model_umap_B = rd.dim_reduce(pd_struct_B_train, umap.UMAP(n_neighbors = n_neighbours_B, 
-                                                                             n_components = n_dims, min_dist=0.75), 
-                                                                              x_base, x_emb, return_model = True)
-                    pd_struct_B_test = rd.apply_dim_reduce_model(pd_struct_B_test, model_umap_B, x_base, x_emb)
-                    
-                    
-                    ###########################################################
-                    #                       DO A TO B                         #
-                    ###########################################################
-                    #3.Find algiment for train data
-                    TAB, RAB = align_manifolds_LT(pd_struct_A_train, pd_struct_B_train, ndims = n_dims, nCentroids = 20,
-                                                   align_field = y_signal, emb_field = x_emb)
-                    
-                    #4.1 train decoder A
-                    emb_A_train = np.concatenate(pd_struct_A_train[x_emb].values, axis=0)
-                    for dim in range(emb_A_train.shape[1]):
-                        emb_A_train[:,dim] -= np.mean(emb_A_train[:,dim], axis=0)
-                    y_A_train = np.concatenate(pd_struct_A_train[y_signal].values, axis=0)
-                    emb_A_test = np.concatenate(pd_struct_A_test[x_emb].values, axis=0)
-                    for dim in range(emb_A_test.shape[1]):
-                        emb_A_test[:,dim] -= np.mean(emb_A_test[:,dim], axis=0)
-                    y_A_test = np.concatenate(pd_struct_A_test[y_signal].values, axis=0)
-                    emb_AB_test = np.transpose(TAB + np.matmul(RAB, emb_A_test.T))
-                    #4.2 train decoder B
-                    emb_B_train = np.concatenate(pd_struct_B_train[x_emb].values, axis=0)
-                    y_B_train = np.concatenate(pd_struct_B_train[y_signal].values, axis=0)
-                    for dim in range(emb_B_train.shape[1]):
-                        emb_B_train[:,dim] -= np.mean(emb_B_train[:,dim], axis=0)
-                    emb_B_test = np.concatenate(pd_struct_B_test[x_emb].values, axis=0)
-                    for dim in range(emb_B_test.shape[1]):
-                        emb_B_test[:,dim] -= np.mean(emb_B_test[:,dim], axis=0)
-                    y_B_test = np.concatenate(pd_struct_B_test[y_signal].values, axis=0)
-                    #5. Get errors
-                    for decoder_name in decoder_list:
-                        model_decoder_A = DECODERS[decoder_name]()
-                        model_decoder_A.fit(emb_A_train, y_A_train)
-                        y_A_pred_A = model_decoder_A.predict(emb_A_test)
-                        
-                        model_decoder_B = DECODERS[decoder_name]()
-                        model_decoder_B.fit(emb_B_train, y_B_train)
-                        y_B_pred_B = model_decoder_B.predict(emb_B_test)
-                        
-                        y_A_pred_B = model_decoder_B.predict(emb_A_test)
-                        y_AB_pred_B = model_decoder_B.predict(emb_AB_test)
-                        
-                        TAB_y, RAB_y = get_point_registration(np.c_[y_A_pred_B, np.zeros(y_A_pred_B.shape[0])], 
-                                                              np.c_[y_A_test, np.zeros(y_A_test.shape[0])])
-                        y_A_pred_B_rot = np.transpose(TAB_y + np.matmul(RAB_y, np.c_[y_A_pred_B, np.zeros(y_A_pred_B.shape[0])].T))
-                        
-                        R2s[x_emb][decoder_name][count_A,count_B,0,kfold] = median_absolute_error(y_A_test[:,0], y_A_pred_A[:,0])
-                        R2s[x_emb][decoder_name][count_A,count_B,1,kfold] = median_absolute_error(y_B_test[:,0], y_B_pred_B[:,0])
-                        R2s[x_emb][decoder_name][count_A,count_B,2,kfold] = median_absolute_error(y_A_test[:,0], y_A_pred_B[:,0])
-                        R2s[x_emb][decoder_name][count_A,count_B,3,kfold] = median_absolute_error(y_A_test[:,0], y_AB_pred_B[:,0])
-                        R2s[x_emb][decoder_name][count_A,count_B,4,kfold] = median_absolute_error(y_A_test[:,0], y_A_pred_B_rot[:,0])
+    else:
+        from sklearn.model_selection import RepeatedKFold
+        rkf = RepeatedKFold(n_splits=5, n_repeats=n_splits)
+        train_indexes_A = [];
+        test_indexes_A = [];
+        for train_index, test_index in rkf.split(signal_A):
+            train_indexes_A.append(train_index)
+            test_indexes_A.append(test_index)
+    if isinstance(trial_signal_B , np.ndarray):
+        if trial_signal_B.ndim>1:
+            trial_signal_B = trial_signal_B[:,0]
+        trial_list_B = np.unique(trial_signal_B)
+        #train with half of trials
+        train_test_division_index_B = int(trial_list_B.shape[0]//1.25)
+    else:
+        from sklearn.model_selection import RepeatedKFold
+        rkf = RepeatedKFold(n_splits=5, n_repeats=n_splits)
+        train_indexes_B = [];
+        test_indexes_B = [];
+        for train_index, test_index in rkf.split(signal_B):
+            train_indexes_B.append(train_index)
+            test_indexes_B.append(test_index)
+    #Check if dirmat specified:
+    if isinstance(input_direction, str) and (isinstance(input_direction_A, str) or isinstance(input_direction_B, str)):
+        raise ValueError("Both input_direction, and input_direction_A/input_direction_B defined. Only specify one")
+    elif not isinstance(input_direction, type(None)) or not (isinstance(input_direction_A, type(None)) or 
+                                                             isinstance(input_direction_B, type(None))):
+        dir_A = gu.handle_input_dataframe_array(input_signal_A, input_direction, input_direction_A, first_array = False)
+        dir_B = gu.handle_input_dataframe_array(input_signal_B, input_direction, input_direction_B, first_array = False)
+    else:
+        dir_A = None
+        dir_B = None 
+        
+    if verbose:
+        print('\tKfold: X/X',end='', sep='')
+        pre_del = '\b\b\b'
+    R2s = dict()
+    for decoder_name in decoder_list:
+        R2s[decoder_name] = np.zeros((5, n_splits))*np.nan
+    for kfold_index in range(n_splits):
+        if verbose:
+            print(pre_del,"%d/%d" %(kfold_index+1,n_splits), sep = '', end='')
+            pre_del = (len(str(kfold_index+1))+len(str(n_splits)))*'\b'
+        #split A signals
+        if isinstance(trial_signal_A, np.ndarray):
+            #split into train and test data
+            fold_split = np.copy(trial_list_A)
+            np.random.shuffle(fold_split)
+            train_index_A = np.any(trial_signal_A.reshape(-1,1)==fold_split[:train_test_division_index_A], axis=1)
+            test_index_A = np.any(trial_signal_A.reshape(-1,1)==fold_split[train_test_division_index_A:], axis=1)
+        else:
+            train_index_A = train_indexes_A[kfold_index]
+            test_index_A = test_index_A[kfold_index]
+        signal_A_train = signal_A[train_index_A,:]
+        signal_A_test = signal_A[test_index_A]
+        label_A_train = label_A[train_index_A]
+        label_A_test = label_A[test_index_A]
+        if isinstance(dir_A, np.ndarray):
+            dir_A_train = dir_A[train_index_A]
+        #create embeddings and project A
+        n_neighbours_A = np.round(signal_A_train.shape[0]*n_neigh).astype(int)
+        model_A = umap.UMAP(n_neighbors = n_neighbours_A, n_components =n_dims, min_dist=0.75)
+        emb_A_train = model_A.fit_transform(signal_A_train)
+        emb_A_test = model_A.transform(signal_A_test)
+        
+        #split B signals
+        if isinstance(trial_signal_B, np.ndarray):
+            #split into train and test data
+            fold_split = np.copy(trial_list_B)
+            np.random.shuffle(fold_split)
+            train_index_B = np.any(trial_signal_B.reshape(-1,1)==fold_split[:train_test_division_index_B], axis=1)
+            test_index_B = np.any(trial_signal_B.reshape(-1,1)==fold_split[train_test_division_index_B:], axis=1)
+        else:
+            train_index_B = train_indexes_B[kfold_index]
+            test_index_B = test_index_B[kfold_index]
+        signal_B_train = signal_B[train_index_B,:]
+        signal_B_test = signal_B[test_index_B]
+        label_B_train = label_B[train_index_B]
+        label_B_test = label_B[test_index_B]
+        if isinstance(dir_B, np.ndarray):
+            dir_B_train = dir_B[train_index_B]
+        #create embeddings and project B
+        n_neighbours_B = np.round(signal_B_train.shape[0]*n_neigh).astype(int)
+        model_B = umap.UMAP(n_neighbors = n_neighbours_B, n_components =n_dims, min_dist=0.75)
+        emb_B_train = model_B.fit_transform(signal_B_train)
+        emb_B_test = model_B.transform(signal_B_test)
+        
+        ###########################################################
+        #                       DO A TO B                         #
+        ###########################################################
+        #3.Find algiment for train data
+        TAB, RAB = align_manifolds_1D(emb_A_train, emb_B_train, label_A_train, label_B_train,
+                                              dir_A_train, dir_B_train, ndims = n_dims, nCentroids = 20)
+        #4.1 train decoder A
+        emb_AB_test = np.transpose(TAB + np.matmul(RAB, emb_A_test.T))
+        #5. Get errors
+        for decoder_name in decoder_list:
+            model_decoder_A = DECODERS[decoder_name]()
+            model_decoder_A.fit(emb_A_train, label_A_train)
+            label_A_pred_A = model_decoder_A.predict(emb_A_test)
+            
+            model_decoder_B = DECODERS[decoder_name]()
+            model_decoder_B.fit(emb_B_train, label_B_train)
+            label_B_pred_B = model_decoder_B.predict(emb_B_test)
+            
+            label_A_pred_B = model_decoder_B.predict(emb_A_test)
+            label_AB_pred_B = model_decoder_B.predict(emb_AB_test)
+            
+            TAB_label, RAB_label = get_point_registration(np.c_[label_A_pred_B, np.zeros(label_A_pred_B.shape[0])], 
+                                                  np.c_[label_A_test, np.zeros(label_A_test.shape[0])])
+            label_A_pred_B_rot = np.transpose(TAB_label + np.matmul(RAB_label, np.c_[label_A_pred_B, 
+                                                                                     np.zeros(label_A_pred_B.shape[0])].T))
+            
+            R2s[decoder_name][0,kfold_index] = median_absolute_error(label_A_test[:,0], label_A_pred_A[:,0])
+            R2s[decoder_name][1,kfold_index] = median_absolute_error(label_B_test[:,0], label_B_pred_B[:,0])
+            R2s[decoder_name][2,kfold_index] = median_absolute_error(label_A_test[:,0], label_A_pred_B[:,0])
+            R2s[decoder_name][3,kfold_index] = median_absolute_error(label_A_test[:,0], label_AB_pred_B[:,0])
+            R2s[decoder_name][4,kfold_index] = median_absolute_error(label_A_test[:,0], label_A_pred_B_rot[:,0])
 
     return R2s
 
-def align_manifolds_LT(pd_struct_1, pd_struct_2, align_field = 'pos', emb_field = "ML_umap", ndims = 2, nCentroids = 20):
 
-    emb_1 = copy.deepcopy(np.concatenate(pd_struct_1[emb_field].values, axis = 0))[:,:ndims]
-    for dim in range(emb_1.shape[1]):
-        emb_1[:,dim] -= np.mean(emb_1[:,dim], axis=0)
-    pos_1 = copy.deepcopy(np.concatenate(pd_struct_1[align_field].values, axis = 0))[:,0].reshape(-1,1)
-    if "dir_mat" not in pd_struct_1:
-        pd_struct_1["dir_mat"] = [np.zeros((pd_struct_1[align_field][idx].shape[0],1)).astype(int)+ ('L' in pd_struct_1["dir"][idx])
-                                + 2*('R' in pd_struct_1["dir"][idx]) for idx in pd_struct_1.index]
-    dirmat_1 = copy.deepcopy(np.concatenate(pd_struct_1["dir_mat"].values, axis = 0))[:,0].reshape(-1,1)
-    
-    emb_1_left = copy.deepcopy(emb_1[dirmat_1[:,0]==1,:])
-    emb_1_right = copy.deepcopy(emb_1[dirmat_1[:,0]==2,:])
-    pos_1_left = copy.deepcopy(pos_1[dirmat_1==1])
-    pos_1_right = copy.deepcopy(pos_1[dirmat_1==2])
+def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B = None, ndims = 2, nCentroids = 20):
+    input_A = input_A[:,:ndims]
+    input_B = input_B[:,:ndims]
+    if label_A.ndim>1:
+        label_A = label_A[:,0]
+    if label_B.ndim>1:
+        label_B = label_B[:,0]
+    #compute label max and min to divide into centroids
+    total_label = np.hstack((label_A, label_B))
+    labelLimits = np.array([(np.percentile(total_label,5), np.percentile(total_label,95))]).T[:,0] 
+    #find centroid size
+    centSize = (labelLimits[1] - labelLimits[0]) / (nCentroids)
+    #define centroid edges a snp.ndarray([lower_edge, upper_edge])
+    centEdges = np.column_stack((np.linspace(labelLimits[0],labelLimits[0]+centSize*(nCentroids),nCentroids),
+                                np.linspace(labelLimits[0],labelLimits[0]+centSize*(nCentroids),nCentroids)+centSize))
 
-    emb_2 = copy.deepcopy(np.concatenate(pd_struct_2[emb_field].values, axis = 0))[:,:ndims]
-    for dim in range(emb_2.shape[1]):
-        emb_2[:,dim] -= np.mean(emb_2[:,dim], axis=0)
-    pos_2 = copy.deepcopy(np.concatenate(pd_struct_2[align_field].values, axis = 0))[:,0].reshape(-1,1)
-    if "dir_mat" not in pd_struct_2:
-        pd_struct_2["dir_mat"] = [np.zeros((pd_struct_2[align_field][idx].shape[0],1)).astype(int)+ ('L' in pd_struct_2["dir"][idx])
-                                + 2*('R' in pd_struct_2["dir"][idx]) for idx in pd_struct_2.index]
-    dirmat_2 = copy.deepcopy(np.concatenate(pd_struct_2["dir_mat"].values, axis = 0))[:,0].reshape(-1,1)
-    
-    emb_2_left = copy.deepcopy(emb_2[dirmat_2[:,0]==1,:])
-    emb_2_right = copy.deepcopy(emb_2[dirmat_2[:,0]==2,:])
-    
-    pos_2_left = copy.deepcopy(pos_2[dirmat_2==1])
-    pos_2_right = copy.deepcopy(pos_2[dirmat_2==2])
+    if isinstance(dir_A, type(None)) or isinstance(dir_B, type(None)):
+        centLabel_A = np.zeros((nCentroids,ndims))
+        centLabel_B = np.zeros((nCentroids,ndims))
+        for c in range(nCentroids):
+            points_A = input_A[np.logical_and(label_A >= centEdges[c,0], label_A<centEdges[c,1]),:]
+            centLabel_A[c,:] = np.median(points_A, axis=0)
+            
+            
+            points_B = input_B[np.logical_and(label_B >= centEdges[c,0], label_B<centEdges[c,1]),:]
+            centLabel_B[c,:] = np.median(points_B, axis=0)
+    else:
+        input_A_left = copy.deepcopy(input_A[dir_A[:,0]==1,:])
+        label_A_left = copy.deepcopy(label_A[dir_A[:,0]==1])
+        input_A_right = copy.deepcopy(input_A[dir_A[:,0]==2,:])
+        label_A_right = copy.deepcopy(label_A[dir_A[:,0]==2])
+        
+        input_B_left = copy.deepcopy(input_B[dir_B[:,0]==1,:])
+        label_B_left = copy.deepcopy(label_B[dir_B[:,0]==1])
+        input_B_right = copy.deepcopy(input_B[dir_B[:,0]==2,:])
+        label_B_right = copy.deepcopy(label_B[dir_B[:,0]==2])
+        
+        centLabel_A = np.zeros((2*nCentroids,ndims))
+        centLabel_B = np.zeros((2*nCentroids,ndims))
+        for c in range(nCentroids):
+            points_A_left = input_A_left[np.logical_and(label_A_left >= centEdges[c,0], label_A_left<centEdges[c,1]),:]
+            centLabel_A[2*c,:] = np.median(points_A_left, axis=0)
+            points_A_right = input_A_right[np.logical_and(label_A_right >= centEdges[c,0], label_A_right<centEdges[c,1]),:]
+            centLabel_A[2*c+1,:] = np.median(points_A_right, axis=0)
+            
+            points_B_left = input_B_left[np.logical_and(label_B_left >= centEdges[c,0], label_B_left<centEdges[c,1]),:]
+            centLabel_B[2*c,:] = np.median(points_B_left, axis=0)
+            points_B_right = input_B_right[np.logical_and(label_B_right >= centEdges[c,0], label_B_right<centEdges[c,1]),:]
+            centLabel_B[2*c+1,:] = np.median(points_B_right, axis=0)
+            
 
-    #find pos edges to start dividing into intervals to later compute their centroids
-    try:
-        posLimits = np.array([(np.percentile(pos,1), np.percentile(pos,99)) for pos in [pos_1_left, pos_2_left, pos_1_right, pos_2_right]])
-        posLimits = [np.max(posLimits[:,0]), np.min(posLimits[:,1])]
-    except:
-        total_pos = np.hstack((pos_1_left, pos_2_left, pos_1_right, pos_2_right))
-        posLimits = np.array([(np.percentile(total_pos,1), np.percentile(total_pos,99))]).T[:,0]
-        
-    centSize = (posLimits[1] - posLimits[0]) / (nCentroids)
-    centEdges = np.column_stack((np.linspace(posLimits[0],posLimits[0]+centSize*(nCentroids),nCentroids),
-                                np.linspace(posLimits[0],posLimits[0]+centSize*(nCentroids),nCentroids)+centSize))
-    centPos_1 = np.zeros((2*nCentroids,ndims))
-    centPos_2 = np.zeros((2*nCentroids,ndims))
-    for c in range(nCentroids):
-        points_left = emb_1_left[np.logical_and(pos_1_left >= centEdges[c,0], pos_1_left<centEdges[c,1]),:]
-        centPos_1[2*c,:] = np.median(points_left, axis=0)
-        
-        points_right = emb_1_right[np.logical_and(pos_1_right >= centEdges[c,0], pos_1_right<centEdges[c,1]),:]
-        centPos_1[2*c+1,:] = np.median(points_right, axis=0)
-        
-        points_left = emb_2_left[np.logical_and(pos_2_left >= centEdges[c,0], pos_2_left<centEdges[c,1]),:]
-        centPos_2[2*c,:] = np.median(points_left, axis=0)
-        
-        points_right = emb_2_right[np.logical_and(pos_2_right >= centEdges[c,0], pos_2_right<centEdges[c,1]),:]
-        centPos_2[2*c+1,:] = np.median(points_right, axis=0)
-    
-    T12,R12 = get_point_registration(centPos_1, centPos_2)
-    return T12, R12
+    TAB,RAB = get_point_registration(centLabel_A, centLabel_B)
+    return TAB, RAB
 
 
 def get_point_registration(p1, p2, verbose=False):
@@ -408,24 +427,62 @@ def get_point_registration(p1, p2, verbose=False):
     #Calculate centroids
     p1_c = np.mean(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
     p2_c = np.mean(p2, axis = 1).reshape((-1,1))
-    
     #Subtract centroids
     q1 = p1-p1_c
     q2 = p2-p2_c
-    
     #Calculate covariance matrix
     H=np.matmul(q1,q2.transpose())
-    
     #Calculate singular value decomposition (SVD)
     U, X, V_t = np.linalg.svd(H) #the SVD of linalg gives you Vt
-    
     #Calculate rotation matrix
     R = np.matmul(V_t.transpose(),U.transpose())
-    
     if not np.allclose(np.linalg.det(R), 1.0) and verbose:
         print("Rotation matrix of N-point registration not 1, see paper Arun et al.")
-    
     #Calculate translation matrix
     T = p2_c - np.matmul(R,p1_c)
-
     return T,R
+
+def cross_session_decoders_LT_dict(dict_df_A, dict_df_B, x_base = "ML_rates", label_signal = "posx", n_dims = 3, n_splits=10, 
+                              decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False):  
+    
+    for file_A, pd_struct_A in dict_df_A.items():
+        if 'index_mat' not in pd_struct_A.columns:
+            pd_struct_A["index_mat"] = [np.zeros((pd_struct_A["pos"][idx].shape[0],1)).astype(int)+pd_struct_A["trial_id"][idx] 
+                                      for idx in range(pd_struct_A.shape[0])]
+        if 'dir_mat' not in pd_struct_A.columns:
+            pd_struct_A["dir_mat"] = [np.zeros((pd_struct_A["pos"][idx].shape[0],1)).astype(int)+
+                                      ('L' in pd_struct_A["dir"][idx])+ 2*('R' in pd_struct_A["dir"][idx])
+                                          for idx in range(pd_struct_A.shape[0])]
+
+    for file_B, pd_struct_B in dict_df_B.items():
+        if 'index_mat' not in pd_struct_B.columns:
+            pd_struct_B["index_mat"] = [np.zeros((pd_struct_B["pos"][idx].shape[0],1)).astype(int)+pd_struct_B["trial_id"][idx] 
+                                      for idx in range(pd_struct_B.shape[0])]
+        if 'dir_mat' not in pd_struct_B.columns:
+            pd_struct_B["dir_mat"] = [np.zeros((pd_struct_B["pos"][idx].shape[0],1)).astype(int)+
+                                      ('L' in pd_struct_B["dir"][idx])+ 2*('R' in pd_struct_B["dir"][idx])
+                                          for idx in range(pd_struct_B.shape[0])]
+    R2s = dict()
+    for decoder_name in decoder_list:
+        R2s[decoder_name] = np.zeros((len(dict_df_A),len(dict_df_B),5, n_splits))*np.nan
+    count_A = -1
+    for file_A, pd_struct_A in dict_df_A.items():
+        count_A += 1
+        count_B = -1
+        if verbose:
+            print('\nWorking on file: %s'%file_A, end = '')   
+        prefix_file_A = file_A[:file_A.find('_LT')]
+        
+        for file_B, pd_struct_B in dict_df_B.items():
+            count_B +=1
+            prefix_file_B = file_B[:file_B.find('_LT')]
+            if prefix_file_A != prefix_file_B:
+                if verbose:
+                    print('\n\tComparing it to: %s'%file_B, end = '')
+                    
+                temp_R2s = cross_session_decoders_LT(pd_struct_A, pd_struct_B, field_signal = x_base, input_label = label_signal, 
+                                                    input_trial ="index_mat", input_direction = "dir_mat", n_splits=n_splits, 
+                                                    n_neigh = 0.01, n_dims = n_dims, decoder_list =decoder_list,verbose = verbose)
+                for decoder_name in decoder_list:
+                    R2s[decoder_name][count_A,count_B,:,:] = temp_R2s[decoder_name] 
+    return R2s

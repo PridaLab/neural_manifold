@@ -24,11 +24,18 @@ def dataframe_to_1array_translator(pd_struct,field):
     if isinstance(pd_struct, pd.DataFrame):
         if field is not None:
             if isinstance(field, str):
-                if field in pd_struct.columns:
+                if ('pos' in field) and (field not in pd_struct.columns):
+                    signal= np.concatenate(pd_struct['pos'], axis=0)
+                    if 'posx' in field:
+                        return signal[:,0].reshape(-1,1)
+                    elif 'posy' in field:
+                        return signal[:,1].reshape(-1,1)
+                    
+                elif field in pd_struct.columns:
                     signal = np.concatenate(pd_struct[field], axis=0)
                     return signal
                 else:
-                    raise ValueError("Field does not in columns of dataframe.")
+                    raise ValueError("Field is not in columns of dataframe.")
         else:
             raise ValueError("If input is a Dataframe, you must indicate the name of the column to use as signal (e.g. 'field'='ML_rates').")
 

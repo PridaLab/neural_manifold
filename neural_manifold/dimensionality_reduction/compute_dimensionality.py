@@ -458,17 +458,26 @@ def dim_to_number_cells(input_signal, field_signal = None, n_neigh = 0.01, n_ste
             #2.CHECK UMAP DIM TRUSTWORTHINESS
             dim, num_trust = compute_umap_trust_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
             dim_dict['num_trust'][num_cells_idx,0,split_idx] = dim
-            dim_dict['num_trust'][num_cells_idx,1,split_idx] = num_trust[dim-1,0]
+            if not np.isnan(dim):
+                dim_dict['num_trust'][num_cells_idx,1,split_idx] = num_trust[dim-1,0]
+            else:
+                dim_dict['num_trust'][num_cells_idx,1,split_idx] = np.nan
             
             #3.CHECK ISOMAP RESVAR DIM
             dim, res_var = compute_isomap_resvar_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
             dim_dict['res_var'][num_cells_idx,0,split_idx] = dim
-            dim_dict[num_cells_idx,1,split_idx] = res_var[dim-1,0]
-            
+            if not np.isnan(dim):
+                dim_dict[num_cells_idx,1,split_idx] = res_var[dim-1,0]
+            else:
+                dim_dict[num_cells_idx,1,split_idx] = np.nan
+
             #4.CHECK ISOMAP REC ERROR DIM
             dim, rec_error = compute_isomap_recerror_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
             dim_dict['rec_error'][num_cells_idx,0,split_idx] = dim
-            dim_dict['rec_error'][num_cells_idx,1,split_idx] = rec_error[dim-1,0]
+            if not np.isnan(dim):
+                dim_dict['rec_error'][num_cells_idx,1,split_idx] = rec_error[dim-1,0]
+            else:
+                dim_dict['rec_error'][num_cells_idx,1,split_idx] = np.nan
             
             #CHECK sI index in 3 dims
             if label_list:
