@@ -21,13 +21,12 @@ class Tee(object):
             
             
 def print_time_verbose(local_starttime, global_starttime= None):
-    
     if isinstance(global_starttime, type(None)):
         print(f'\t{datetime.now():%Y-%m-%d %H:%M}', end=' ')
-        print(f'- Running Time: {timeit.default_timer()-local_starttime:.4f} s')
+        print(f'- Running Time: {timeit.default_timer()-local_starttime:.2f}s')
     else:
         print(f'\t{datetime.now():%Y-%m-%d %H:%M}', end=' ')
-        print(f'- Running Time: {timeit.default_timer()-local_starttime:.4f} s', end= ' ')
-        print(f'({timeit.default_timer()-global_starttime:.4f} s)')
+        print(f'- Running Time: {timeit.default_timer()-local_starttime:.2f}s', end= ' ')
+        print(f'({timeit.default_timer()-global_starttime:.2f}s)')
     
     
