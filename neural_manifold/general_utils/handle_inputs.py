@@ -10,17 +10,15 @@ import copy
 from neural_manifold.general_utils import translators as trns
 
 
-def handle_input_dataframe_array(input_object, input_signal_1 = None, input_signal_2 = None, first_array = True):
-    if isinstance(input_signal_1, str):
-        if isinstance(input_object, pd.DataFrame): #check if input is dataframe
-            return trns.dataframe_to_1array_translator(input_object,input_signal_1)
-        else:
-            raise ValueError("If signal is a string, input object must be a dataframe.")
-    elif isinstance(input_signal_2, str):
-        if isinstance(input_object, pd.DataFrame): #check if input is dataframe
-            return trns.dataframe_to_1array_translator(input_object,input_signal_2)
-        else:
-            raise ValueError("If signal is a string, input object must be a dataframe.")
+def handle_input_dataframe_array(input_object, input_signal_1 = None, input_signal_2 = None, first_array = True): 
+    '''General function to handle inputs that can either be a dataframe+column_string or a numpy array.
+    Priority is as follow:
+    input_object[input_signal_1]>input_object[input_signal_2]>input_signal_1>input_signal_2>input_object
+    '''
+    if isinstance(input_signal_1, str) and isinstance(input_object, pd.DataFrame): 
+        return trns.dataframe_to_1array_translator(input_object,input_signal_1)
+    elif isinstance(input_signal_2, str) and isinstance(input_object, pd.DataFrame):
+        return trns.dataframe_to_1array_translator(input_object,input_signal_2)
     elif isinstance(input_signal_1, np.ndarray):
         return copy.deepcopy(input_signal_1)
     elif isinstance(input_signal_2, np.ndarray):
