@@ -106,6 +106,7 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
             test_indexes.append(test_index)
     if verbose:
         print('\t\tKfold: X/X',end='', sep='')
+        pre_del = '\b\b\b'
     #initialize dictionary of this session (then it will be appended into the global dictionary)
     if not field_signal:
         field_signal = 'base_signal'
@@ -117,10 +118,8 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
     
     for kfold_index in range(n_splits):
         if verbose:
-            if kfold_index<10:
-                print('\b\b \b\b\b',kfold_index+1, '/',n_splits,sep='', end='')
-            else:
-                print('\b\b\b \b\b\b',kfold_index+1, '/',n_splits,sep='', end='')
+            print(pre_del,"%d/%d" %(kfold_index+1,n_splits), sep = '', end='')
+            pre_del = (len(str(kfold_index+1))+len(str(n_splits))+1)*'\b'
         if isinstance(trial_signal, np.ndarray):
             #split into train and test data
             fold_split = np.copy(trial_list)
@@ -173,54 +172,25 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
                 
     return R2s 
 
-
-def decoders_1D_dict(dict_df, field_signal = "ML_rates", emb_list=["ML_umap"], input_label = ["posx"],
-                     n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"],verbose = False):  
-    
-    R2s_dict = dict()
-    if verbose:
-        fnames = list(dict_df.keys())
-    count = 0
-    for file, pd_struct in dict_df.items():
-        count +=1
-        if verbose:
-            print('\tWorking on entry %i/' %count, '%i: ' %len(fnames), file, sep='')   
-        #add trial signal if not present in session
-        if 'index_mat' not in pd_struct.columns:
-            pd_struct["index_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1)).astype(int)+pd_struct["trial_id"][idx] 
-                                      for idx in range(pd_struct.shape[0])]
-        #train decoders
-        R2s_dict[file] = decoders_1D(pd_struct,field_signal = field_signal, input_label=input_label, emb_list = emb_list, 
-                             input_trial = 'index_mat', n_dims = 10, n_splits=10, decoder_list = decoder_list, verbose = False)
-        #print
-        if verbose:
-            print("")
-    return R2s_dict 
-
 def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = None, field_signal_A = None, field_signal_B = None, 
                               input_label = None, input_label_A = None, input_label_B = None, 
                               input_trial = None, input_trial_A = None, input_trial_B= None, 
                               input_direction = None, input_direction_A = None, input_direction_B = None,
                               n_splits=10, n_neigh = 0.01, n_dims = 3, decoder_list = ["wf", "wc", "xgb", "svr"],verbose = True):
     #check signal input A
-    if isinstance(field_signal_A, str) and isinstance(field_signal, str):
-        raise ValueError("Both field_signal and field_signal_A defined. Only specify one.")
+    assert isinstance(field_signal_A, str)^isinstance(field_signal, str), "Both field_signal and field_signal_A defined. Only specify one."
     signal_A = gu.handle_input_dataframe_array(input_signal_A, field_signal, field_signal_A, first_array = True)
     #check signal input B
-    if isinstance(field_signal_B, str) and isinstance(field_signal, str):
-        raise ValueError("Both field_signal and field_signal_B defined. Only specify one.")
+    assert isinstance(field_signal_B, str)^isinstance(field_signal, str), "Both field_signal and field_signal_B defined. Only specify one."
     signal_B = gu.handle_input_dataframe_array(input_signal_B, field_signal, field_signal_B, first_array = True)
     #check input label
-    if isinstance(input_label, str) and (isinstance(input_label_A, str) or isinstance(input_label_B, str)):
-        raise ValueError("Both input_label, and input_label_A/input_label_B defined. Only specify one")
-    else:
-        label_A = gu.handle_input_dataframe_array(input_signal_A, input_label, input_label_A, first_array = False)
-        label_B = gu.handle_input_dataframe_array(input_signal_B, input_label, input_label_B, first_array = False)
+    assert isinstance(input_label, str)^(isinstance(input_label_A, str) and isinstance(input_label_B, str)), "Both input_label, and input_label_A/input_label_B defined. Only specify one"
+    label_A = gu.handle_input_dataframe_array(input_signal_A, input_label, input_label_A, first_array = False)
+    label_B = gu.handle_input_dataframe_array(input_signal_B, input_label, input_label_B, first_array = False)
     #Check if trial mat to use when spliting training/test
-    if isinstance(input_trial, str) and (isinstance(input_trial_A, str) or isinstance(input_trial_B, str)):
-        raise ValueError("Both input_trial, and input_trial_A/input_trial_B defined. Only specify one")
-    elif not isinstance(input_trial, type(None)) or not (isinstance(input_trial_A, type(None)) or 
-                                                         isinstance(input_trial_B, type(None))):
+    assert isinstance(input_trial, str)^(isinstance(input_trial_A, str) and isinstance(input_trial_B, str)), "Both input_trial, and input_trial_A/input_trial_B defined. Only specify one"
+    if not isinstance(input_trial, type(None)) or not (isinstance(input_trial_A, type(None)) 
+                                                       and isinstance(input_trial_B, type(None))):
         trial_signal_A = gu.handle_input_dataframe_array(input_signal_A, input_trial, input_trial_A, first_array = False)
         trial_signal_B = gu.handle_input_dataframe_array(input_signal_B, input_trial, input_trial_B, first_array = False)
     else:
@@ -233,6 +203,8 @@ def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = Non
         trial_list_A = np.unique(trial_signal_A)
         #train with half of trials
         train_test_division_index_A = int(trial_list_A.shape[0]//1.25)
+        train_indexes_A = None
+        test_indexes_A = None
         
     else:
         from sklearn.model_selection import RepeatedKFold
@@ -248,6 +220,8 @@ def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = Non
         trial_list_B = np.unique(trial_signal_B)
         #train with half of trials
         train_test_division_index_B = int(trial_list_B.shape[0]//1.25)
+        train_indexes_B = None
+        test_indexes_B = None
     else:
         from sklearn.model_selection import RepeatedKFold
         rkf = RepeatedKFold(n_splits=5, n_repeats=n_splits)
@@ -257,9 +231,8 @@ def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = Non
             train_indexes_B.append(train_index)
             test_indexes_B.append(test_index)
     #Check if dirmat specified:
-    if isinstance(input_direction, str) and (isinstance(input_direction_A, str) or isinstance(input_direction_B, str)):
-        raise ValueError("Both input_direction, and input_direction_A/input_direction_B defined. Only specify one")
-    elif not isinstance(input_direction, type(None)) or not (isinstance(input_direction_A, type(None)) or 
+    assert isinstance(input_direction, str)^(isinstance(input_direction_A, str) and isinstance(input_direction_B, str)),"Both input_direction, and input_direction_A/input_direction_B defined. Only specify one"
+    if not isinstance(input_direction, type(None)) or not (isinstance(input_direction_A, type(None)) and 
                                                              isinstance(input_direction_B, type(None))):
         dir_A = gu.handle_input_dataframe_array(input_signal_A, input_direction, input_direction_A, first_array = False)
         dir_B = gu.handle_input_dataframe_array(input_signal_B, input_direction, input_direction_B, first_array = False)
@@ -273,50 +246,53 @@ def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = Non
     R2s = dict()
     for decoder_name in decoder_list:
         R2s[decoder_name] = np.zeros((5, n_splits))*np.nan
+    
+    def split_signals(signal, label, trial_signal = None, trial_list = None, train_test_division_index = None, dir_mat= None,
+                      train_indexes = None, test_indexes = None):
+        if isinstance(trial_signal, np.ndarray):
+            fold_split = np.copy(trial_list)
+            np.random.shuffle(fold_split)
+            train_index = np.any(trial_signal.reshape(-1,1)==fold_split[:train_test_division_index], axis=1)
+            test_index = np.any(trial_signal.reshape(-1,1)==fold_split[train_test_division_index:], axis=1)
+        else:
+            train_index = train_indexes[kfold_index]
+            test_index = test_indexes[kfold_index]
+        
+        signal_train = signal[train_index]
+        signal_test = signal[test_index]
+        label_train = label[train_index]
+        label_test = label[test_index]
+        if isinstance(dir_mat, np.ndarray):
+            dir_train = dir_mat[train_index]
+        else:
+            dir_train = None
+        return signal_train, signal_test, label_train, label_test, dir_train
+     
     for kfold_index in range(n_splits):
         if verbose:
             print(pre_del,"%d/%d" %(kfold_index+1,n_splits), sep = '', end='')
             pre_del = (len(str(kfold_index+1))+len(str(n_splits)))*'\b'
         #split A signals
-        if isinstance(trial_signal_A, np.ndarray):
-            #split into train and test data
-            fold_split = np.copy(trial_list_A)
-            np.random.shuffle(fold_split)
-            train_index_A = np.any(trial_signal_A.reshape(-1,1)==fold_split[:train_test_division_index_A], axis=1)
-            test_index_A = np.any(trial_signal_A.reshape(-1,1)==fold_split[train_test_division_index_A:], axis=1)
-        else:
-            train_index_A = train_indexes_A[kfold_index]
-            test_index_A = test_index_A[kfold_index]
-        signal_A_train = signal_A[train_index_A,:]
-        signal_A_test = signal_A[test_index_A]
-        label_A_train = label_A[train_index_A]
-        label_A_test = label_A[test_index_A]
-        if isinstance(dir_A, np.ndarray):
-            dir_A_train = dir_A[train_index_A]
+        signal_A_train, signal_A_test, label_A_train, label_A_test, dir_A_train = split_signals(signal_A, 
+                                                    label_A, trial_signal_A,trial_list_A, train_test_division_index_A, 
+                                                    dir_A, train_indexes_A, test_indexes_A)
         #create embeddings and project A
-        n_neighbours_A = np.round(signal_A_train.shape[0]*n_neigh).astype(int)
+        if n_neigh<1:
+            n_neighbours_A = np.round(signal_A_train.shape[0]*n_neigh).astype(int)
+        else:
+            n_neighbours_A = n_neigh
         model_A = umap.UMAP(n_neighbors = n_neighbours_A, n_components =n_dims, min_dist=0.75)
         emb_A_train = model_A.fit_transform(signal_A_train)
         emb_A_test = model_A.transform(signal_A_test)
-        
         #split B signals
-        if isinstance(trial_signal_B, np.ndarray):
-            #split into train and test data
-            fold_split = np.copy(trial_list_B)
-            np.random.shuffle(fold_split)
-            train_index_B = np.any(trial_signal_B.reshape(-1,1)==fold_split[:train_test_division_index_B], axis=1)
-            test_index_B = np.any(trial_signal_B.reshape(-1,1)==fold_split[train_test_division_index_B:], axis=1)
-        else:
-            train_index_B = train_indexes_B[kfold_index]
-            test_index_B = test_index_B[kfold_index]
-        signal_B_train = signal_B[train_index_B,:]
-        signal_B_test = signal_B[test_index_B]
-        label_B_train = label_B[train_index_B]
-        label_B_test = label_B[test_index_B]
-        if isinstance(dir_B, np.ndarray):
-            dir_B_train = dir_B[train_index_B]
+        signal_B_train, signal_B_test, label_B_train, label_B_test, dir_B_train = split_signals(signal_B, 
+                                                    label_B, trial_signal_B, trial_list_B, train_test_division_index_B, 
+                                                    dir_B, train_indexes_B, test_indexes_B)
         #create embeddings and project B
-        n_neighbours_B = np.round(signal_B_train.shape[0]*n_neigh).astype(int)
+        if n_neigh<1:
+            n_neighbours_B = np.round(signal_B_train.shape[0]*n_neigh).astype(int)
+        else:
+            n_neighbours_B = n_neigh
         model_B = umap.UMAP(n_neighbors = n_neighbours_B, n_components =n_dims, min_dist=0.75)
         emb_B_train = model_B.fit_transform(signal_B_train)
         emb_B_test = model_B.transform(signal_B_test)
@@ -406,7 +382,6 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
             points_B_right = input_B_right[np.logical_and(label_B_right >= centEdges[c,0], label_B_right<centEdges[c,1]),:]
             centLabel_B[2*c+1,:] = np.median(points_B_right, axis=0)
             
-
     TAB,RAB = get_point_registration(centLabel_A, centLabel_B)
     return TAB, RAB
 
