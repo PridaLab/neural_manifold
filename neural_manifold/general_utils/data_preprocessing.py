@@ -9,7 +9,7 @@ import copy
 
 import scipy.signal as scs
 from scipy.ndimage import convolve1d
-
+import warnings
 
 #Adapted from PyalData (19/10/21) (add lower case, and continuous option)
 def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous = False, num_bins = 10, assymetry = False):
@@ -53,9 +53,7 @@ def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous
     assert sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw or std"
     if method == "smooth":
         if win is None:
-            if hw is None:
-                std = 0.05
-            else:
+            if hw is not None:
                 std = hw_to_std(hw)
                 
             win = norm_gauss_window(bin_size, std, num_bins = num_bins, assymetry = assymetry)
@@ -104,7 +102,7 @@ def norm_gauss_window(bin_size, std, num_bins = 10, assymetry = False):
     win (1D np.array): Gaussian kernel with length: num_bins*std/bin_length
                 mass normalized to 1
     """
-    win_len = int(10*std/bin_size)
+    win_len = int(num_bins*std/bin_size)
     if win_len%2==0:
         win_len = win_len+1
     win = scs.gaussian(win_len, std/bin_size)
@@ -147,7 +145,7 @@ def smooth_data(mat, bin_size=None, std=None, hw=None, win=None, assymetry = Fal
     assert  sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw or std"
     
     if win is None:
-        assert bin_size is not None, "specify dt if not supplying window"
+        assert bin_size is not None, "specify bin_size if not supplying window"
         if std is None:
             std = hw_to_std(hw)
         win = norm_gauss_window(bin_size, std, assymetry = assymetry)
@@ -200,3 +198,95 @@ def select_trials(trial_data, query, reset_index=True):
         return trial_data.loc[trials_to_keep, :].reset_index(drop=True)
     else:
         return trial_data.loc[trials_to_keep, :]
+    
+    
+def remove_low_firing_neurons(trial_data, signal, threshold, divide_by_bin_size=None, verbose=False, mask= None):
+    """
+    Remove neurons from signal whose average firing rate
+    across all trials is lower than a threshold
+    
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+    signal : str
+        signal from which to calculate the average firing rates
+        ideally spikes or rates
+    threshold : float
+        threshold in Hz
+    divide_by_bin_size : bool, optional
+        whether to divide by the bin size when calculating the firing rates
+    verbose : bool, optional, default False
+        print a message about how many neurons were removed
+
+    Returns
+    -------
+    trial_data with the low-firing neurons removed from the
+    signal and the corresponding unit_guide
+    """
+
+    if not np.any(mask):
+        av_rates = np.mean(np.concatenate(trial_data[signal].values, axis=0), axis=0)
+        if divide_by_bin_size:
+            av_rates = av_rates/trial_data.bin_size[0]
+        mask = av_rates >= threshold
+        
+    neuronal_fields = _get_neuronal_fields(trial_data, ref_field= signal)
+    for nfield in neuronal_fields:
+        trial_data[nfield] = [arr[:, mask] for arr in trial_data[nfield]]
+    
+    if signal.endswith("_spikes"):
+        suffix = "_spikes"
+    elif signal.endswith("_rates"):
+        suffix = "_rates"
+    else:
+        warnings.warn("Could not determine which unit_guide to modify.")
+    unit_guide = signal[:-len(suffix)] + "_unit_guide"
+    if unit_guide in trial_data.columns:
+        trial_data[unit_guide] = [arr[mask, :] for arr in trial_data[unit_guide]]
+    if verbose:
+        print(f"Removed {np.sum(~mask)} neurons from {signal}.")
+    return trial_data
+  
+    
+def _get_neuronal_fields(trial_data, ref_field=None):
+    """
+    Identify time-varying fields in the dataset
+    
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+
+    ref_field : str (optional)
+        time-varying field to use for identifying the rest
+        if not given, the first field that ends with "spikes" or "rates" is used
+
+    Returns
+    -------
+    neuronal_fields : list of str
+        list of fieldnames that store time-varying signals
+    """
+    if ref_field is None:
+        # look for a spikes field
+        ref_field = [col for col in trial_data.columns.values
+                     if col.endswith("spikes") or col.endswith("rates")][0]
+
+    # identify candidates based on the first trial
+    first_trial = trial_data.iloc[0]
+    T = first_trial[ref_field].shape[1]
+    neuronal_fields = []
+    for col in first_trial.index:
+        try:
+            if first_trial[col].shape[1] == T:
+                neuronal_fields.append(col)
+        except:
+            pass
+
+    # but check the rest of the trials, too
+    ref_lengths = np.array([arr.shape[1] for arr in trial_data[ref_field]])
+    for col in neuronal_fields:
+        col_lengths = np.array([arr.shape[1] for arr in trial_data[col]])
+        assert np.all(col_lengths == ref_lengths), f"not all lengths in {col} match the reference {ref_field}"
+
+    return neuronal_fields
