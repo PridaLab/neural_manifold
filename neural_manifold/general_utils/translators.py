@@ -11,9 +11,8 @@ import warnings
 
 def apply_to_dict(input_function, input_dict, *args, **kwargs):
     try:
-        breakpoint()
         if 'verbose' in kwargs and kwargs['verbose']:
-            print(f'Applying function {input_function.__name__} to dict: ', end='')
+            print(f"Applying function '{input_function.__name__}' to dict: ", end='')
             dict_new = dict()
             for name, pd_struct in input_dict.items():
                 print(f'\n{name}: ')

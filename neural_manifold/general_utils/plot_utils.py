@@ -7,7 +7,7 @@ Created on Fri Feb 18 16:23:28 2022
 
 ##TO CLEAN!!!
 
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pyaldata as pyd

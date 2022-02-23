@@ -6,16 +6,12 @@ Created on Fri Feb 18 16:13:36 2022
 """
 
 import os, fnmatch
-import pyaldata as pyd
 import numpy as np
 import pickle
+import pandas as pd
+import scipy.io
 
-# %%
-###########################################################################
-#                                   LOAD FILES
-###########################################################################    
-
-def get_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
+def load_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
     """
     Load all files in the given directory whose name/type match the pattern specified.
     
@@ -46,7 +42,7 @@ def get_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
                 name_dict = file[:file.find('_PyalData')]
             except:
                 name_dict = file[:-3]
-            data_dict[name_dict] = pyd.mat2dataframe(os.path.join(data_dir,file), shift_idx_fields = True)
+            data_dict[name_dict] = mat2dataframe(os.path.join(data_dir,file), shift_idx_fields = True)
         elif "pickle" in struct_type:
             load_file = open(os.path.join(data_dir,file),"rb")
             data_dict[file] = pickle.load(load_file)
@@ -60,3 +56,139 @@ def get_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
     if len(data_dict)==1:
         data_dict = data_dict[file]
     return data_dict
+
+
+
+def mat2dataframe(path, shift_idx_fields, td_name=None):
+    """
+    Load a trial_data .mat file and turn it into a pandas DataFrame
+
+    Parameters
+    ----------
+    path : str
+        path to the .mat file to load
+        "Can also pass open file-like object."
+    td_name : str, optional
+        name of the variable under which the data was saved
+    shift_idx_fields : bool
+        whether to shift the idx fields
+        set to True if the data was exported from matlab
+        using its 1-based indexig
+
+    Returns
+    -------
+    df : pd.DataFrame
+        pandas dataframe replicating the trial_data format
+        each row is a trial
+    """
+    try:
+        mat = scipy.io.loadmat(path, simplify_cells=True)
+    except NotImplementedError:
+        try:
+            import mat73
+        except ImportError:
+            raise ImportError("Must have mat73 installed to load mat73 files.")
+        else:
+            mat = mat73.loadmat(path)
+
+    real_keys = [k for k in mat.keys() if not (k.startswith("__") and k.endswith("__"))]
+
+    if td_name is None:
+        if len(real_keys) == 0:
+            raise ValueError("Could not find dataset name. Please specify td_name.")
+        elif len(real_keys) > 1:
+            raise ValueError("More than one datasets found. Please specify td_name.")
+
+        assert len(real_keys) == 1
+
+        td_name = real_keys[0]
+
+    df = pd.DataFrame(mat[td_name])
+
+    df = clean_0d_array_fields(df)
+    df = clean_integer_fields(df)
+
+    if shift_idx_fields:
+        df = backshift_idx_fields(df)
+
+    return df
+
+
+def backshift_idx_fields(trial_data):
+    """
+    Adjust index fields from 1-based to 0-based indexing
+
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+
+    Returns
+    -------
+    trial_data with the 'idx_' fields adjusted
+    """
+    idx_fields = [col for col in trial_data.columns.values if col.startswith("idx")]
+
+    for col in idx_fields:
+        # using a list comprehension to still work if the idx field itself is an array
+        trial_data[col] = [idx - 1 for idx in trial_data[col]]
+
+    return trial_data
+
+
+def clean_0d_array_fields(df):
+    """
+    Loading v7.3 MAT files, sometimes scalers are stored as 0-dimensional arrays for some reason.
+    This converts those back to scalars.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        data in trial_data format
+
+    Returns
+    -------
+    a copy of df with the relevant fields changed
+    """
+    for c in df.columns:
+        if isinstance(df[c].values[0], np.ndarray):
+            if all([arr.ndim == 0 for arr in df[c]]):
+                df[c] = [arr.item() for arr in df[c]]
+
+    return df
+
+
+def clean_integer_fields(df):
+    """
+    Modify fields that store integers as floats to store them as integers instead.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        data in trial_data format
+
+    Returns
+    -------
+    a copy of df with the relevant fields changed
+    """
+    for field in df.columns:
+        if isinstance(df[field].values[0], np.ndarray):
+            try:
+                int_arrays = [np.int32(arr) for arr in df[field]]
+            except:
+                print(f"array field {field} could not be converted to int.")
+            else:
+                if all([np.allclose(int_arr, arr) for (int_arr, arr) in zip(int_arrays, df[field])]):
+                    df[field] = int_arrays
+        else:
+            if not isinstance(df[field].values[0], str):
+                try:
+                    int_version = np.int32(df[field])
+                except:
+                        print(f"field {field} could not be converted to int.")
+                else:
+                    if np.allclose(int_version, df[field]):
+                        df[field] = int_version
+
+    return df
+
