@@ -9,6 +9,20 @@ import pandas as pd
 import numpy as np
 import warnings
 
+def apply_to_dict(input_function, input_dict, *args, **kwargs):
+    try:
+        breakpoint()
+        if 'verbose' in kwargs and kwargs['verbose']:
+            print(f'Applying function {input_function.__name__} to dict: ', end='')
+            dict_new = dict()
+            for name, pd_struct in input_dict.items():
+                print(f'\n{name}: ')
+                dict_new[name] = input_function(pd_struct, *args, **kwargs) 
+        else:
+            dict_new = {name: input_function(pd_struct, *args, **kwargs) for name, pd_struct in input_dict.items()}
+        return dict_new
+    except:
+        raise ValueError("Could not apply function to dictionary")
 
 def dataframe_to_1array_translator(pd_struct,field):
     '''Translator used to convert a specific panda DataFrame atribute into a numpy array by concatenating
