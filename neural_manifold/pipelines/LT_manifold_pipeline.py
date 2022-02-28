@@ -869,7 +869,131 @@ def _compute_isomap_LT(df_dict, field, iso_field, still_dict, fail_dict, save_pl
 ###############################################################################
 import umap
 from umap import validation
+def _compute_umap_LT(df_dict, field, umap_field, still_dict, fail_dict, neighbours, min_dist, save_plot_dir,mouse, kwargs):
+    models_umap = dict()
+    if not kwargs["apply_same_model"]: 
+        count = 0
+        for file, pd_struct in df_dict.items():
+            models_umap[file] = dict()
+            count += 1
+            if kwargs["verbose"]:
+                print('\tWorking on entry %i/' %count, '%i: ' %len(kwargs["fnames"]), file, sep='')  
+            #TODO: optimize number of neighbours
+            if neighbours<1:
+                length = np.concatenate(pd_struct[field].values, axis=0).shape[0]
+                nn = np.round(length*neighbours).astype(int)
+                if kwargs["verbose"]:
+                    print('\t\tInterpreting umap neighbours (%.4f) as fraction of points. Resulting in %d neighbours.'
+                          %(neighbours, nn))
+            else:
+                nn = neighbours
+            #check number of dimensions value
+            if isinstance(kwargs["umap_dims"],str):
+                if 'optimize_to_umap_trust' in kwargs["umap_dims"]:
+                    umap_dim, num_trust =dim_red.compute_umap_trust_dim(pd_struct,field,n_neigh=nn, 
+                                                                    min_dist=min_dist, verbose=kwargs["verbose"])  
+                    if umap_dim<3:
+                        umap_dim = 3
+                    models_umap[file]["dim_num_trust"] = num_trust
+            else:
+                umap_dim = kwargs["umap_dims"]
+            #compute model and project
+            out_struct, model_umap = dim_red.dim_reduce(pd_struct, umap.UMAP(n_neighbors = nn, 
+                                                                     n_components = umap_dim,
+                                                                     random_state=kwargs["rand_state_umap"], 
+                                                                     min_dist=min_dist), 
+                                                   field, umap_field, return_model = True)
+            #TODO: consider including here dim_red.study_dim_to_cells but it takes for ever
+            df_dict.update({file: out_struct})
+            #save model
+            models_umap[file]["model"] = model_umap
+            num_trust = validation.trustworthiness_vector(source=np.concatenate(pd_struct[field].values, axis=0),
+                                              embedding=np.concatenate(pd_struct[umap_field].values, axis=0), max_k=30)
+            models_umap[file]["num_trust"] = num_trust[1:]
+            if kwargs["verbose"]:
+                print('\t\tNumerical trustworthiness: ', np.nanmean(num_trust), sep='')
+            #apply model to still and fail data
+            if still_dict and fail_dict:
+                try:
+                    still_dict.update({file: dim_red.apply_dim_reduce_model(still_dict[file], models_umap[file]["model"], 
+                                                                     field, umap_field)})
+                    fail_dict.update({file: dim_red.apply_dim_reduce_model(fail_dict[file], models_umap[file]["model"],
+                                                                     field, umap_field)})
+                except:
+                    pass
+    else:
+        #concat data of all sessions
+        data_list = [np.concatenate(pd_struct[field].values, axis=0) for _, pd_struct in df_dict.items()]
+        data_array = np.concatenate(data_list, axis=0)
+        if kwargs["verbose"]:
+            print('\tProjecting all data together to find a common model.')  
+        #TODO: optimize number of neighbours
+        if neighbours<1:
+            nn_list = [np.round(data.shape[0]*neighbours).astype(int) for data in data_list]
+            nn = np.round(np.mean(nn_list)).astype(int)
+            if kwargs["verbose"]:
+                print('\t\tInterpreting umap neighbours (%.4f) as fraction of points. Resulting in %d neighbours.'
+                      %(neighbours, nn))
+        else:
+            nn = neighbours
+        if isinstance(kwargs["umap_dims"],str):
+            if 'optimize_to_umap_trust' in kwargs["umap_dims"]:
+                umap_dim, num_trust =dim_red.compute_umap_trust_dim(data_array,n_neigh=nn, 
+                                                                min_dist=min_dist, verbose=kwargs["verbose"])  
+                if umap_dim<3:
+                    umap_dim = 3
+                models_umap[file]["dim_num_trust"] = num_trust
+        else:
+            umap_dim = kwargs["umap_dims"]
+        model_umap = umap.UMAP(n_neighbors = nn, n_components = umap_dim, 
+                               random_state=kwargs["rand_state_umap"], min_dist=min_dist)
+        model_umap.fit(data_array)
+        count = 0
+        for file, pd_struct in df_dict.items():
+            models_umap[file] = dict()
+            count += 1
+            if kwargs["verbose"]:
+                print('\tWorking on entry %i/' %count, '%i: ' %len(kwargs["fnames"]), file, sep='')  
+            
+            #compute model and project
+            out_struct = dim_red.apply_dim_reduce_model(pd_struct, model_umap, field, umap_field)
+            df_dict.update({file: out_struct})
+            #save model
+            models_umap[file]["model"] = model_umap
+            num_trust = validation.trustworthiness_vector(source=np.concatenate(pd_struct[field].values, axis=0),
+                                              embedding=np.concatenate(pd_struct[umap_field].values, axis=0), max_k=30)
+            models_umap[file]["num_trust"] = num_trust[1:]
+            if kwargs["verbose"]:
+                print('\t\tNumerical trustworthiness: ', np.nanmean(num_trust), sep='')
+            #apply model to still and fail data
+            if still_dict and fail_dict:
+                try:
+                    still_dict.update({file: dim_red.apply_dim_reduce_model(still_dict[file], models_umap[file]["model"], 
+                                                                     field, umap_field)})
+                    fail_dict.update({file: dim_red.apply_dim_reduce_model(fail_dict[file], models_umap[file]["model"],
+                                                                     field, umap_field)})
+                except:
+                    pass
+    if kwargs["display_plots"]:
+        #plot 3D points
+        gu.plot_3D_embedding_LT(df_dict, umap_field, 'Umap: '+umap_field) 
+        plt.savefig(os.path.join(save_plot_dir, mouse+'_'+  umap_field + '_3D'))
+        
+        gu.plot_3D_embedding_LT_v2(df_dict, umap_field, 'Umap: '+umap_field) 
+        plt.savefig(os.path.join(save_plot_dir, mouse+'_'+  umap_field+ '_3D_time'))
+        #plot 2D projections
+        gu.plot_2D_embedding_LT(df_dict, umap_field, mouse=mouse, save = True, save_dir = save_plot_dir)
+        plt.close()
+        if kwargs["apply_same_model"] and len(kwargs["fnames"])==2:
+            gu.plot_2D_embedding_DS(df_dict, umap_field, mouse=mouse, save = True, save_dir = save_plot_dir)
+            plt.close()
+        #plot trajectory
+        if kwargs["plot_trajectory"]:
+            gu.plot_trajectory_embedding_LT(df_dict, umap_field, 'Umap: '+umap_field)
+            plt.savefig(os.path.join(save_plot_dir, mouse+'_'+ umap_field + '_trajectory'))
+    return df_dict, still_dict, fail_dict, models_umap
 
+'''
 def _compute_umap_LT(df_dict, field, umap_field, still_dict, fail_dict, neighbours, min_dist, save_plot_dir,mouse, kwargs):
     models_umap = dict()
     count = 0
@@ -986,6 +1110,8 @@ def __optimize_nn_umap(data, min_dist, umap_dim, kwargs):
         print('\t\t\tBest combination is %d (%.2f%%) neighbours' %(nn_real[idx_max], n_neighbours[idx_max]*100)) 
     nn = nn_real[idx_max]
     return nn, num_trust
+'''
+
 '''
 def __optimize_dim_umap(data,nn, min_dist, max_dim = 10, verbose=True):
     dims = 1
