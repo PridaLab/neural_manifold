@@ -16,7 +16,7 @@ def apply_to_dict(input_function, input_dict, *args, **kwargs):
             dict_new = dict()
             for name, pd_struct in input_dict.items():
                 print(f'\n{name}: ')
-                dict_new[name] = input_function(pd_struct, *args, **kwargs) 
+                dict_new[name] = input_function(pd_struct, *args, **kwargs)             
         else:
             dict_new = {name: input_function(pd_struct, *args, **kwargs) for name, pd_struct in input_dict.items()}
         return dict_new
