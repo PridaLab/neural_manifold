@@ -200,7 +200,7 @@ def select_trials(trial_data, query, reset_index=True):
         return trial_data.loc[trials_to_keep, :]
     
     
-def remove_low_firing_neurons(trial_data, signal, threshold, divide_by_bin_size=None, verbose=False, mask= None):
+def remove_low_firing_neurons(trial_data, signal, threshold=None, divide_by_bin_size=None, verbose=False, mask= None):
     """
     Remove neurons from signal whose average firing rate
     across all trials is lower than a threshold
