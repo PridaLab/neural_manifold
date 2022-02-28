@@ -19,7 +19,7 @@ class Tee(object):
         for f in self.files:
             f.flush()
             
-            
+
 def print_time_verbose(local_starttime, global_starttime= None):
     if isinstance(global_starttime, type(None)):
         print(f'\t{datetime.now():%Y-%m-%d %H:%M}', end=' ')
