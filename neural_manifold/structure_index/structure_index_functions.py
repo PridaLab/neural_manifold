@@ -63,12 +63,13 @@ def assign_labels(data, kn):
 
 
 def compute_pointCloudsOverlap(cloud1, cloud2, k):
+    breakpoint()
     #Stack both clouds
     cloud_all = np.vstack((cloud1, cloud2))
     #Create cloud label
     cloud_label = np.hstack((np.ones(cloud1.shape[0]), np.ones(cloud2.shape[0])*2))
     #Compute k neighbours graph wieghted by cloud label
-    connectivity = kneighbors_graph(X=cloud_all, n_neighbors=k, mode='connectivity').toarray() * cloud_label
+    connectivity = kneighbors_graph(X=cloud_all, n_neighbors=k, mode='connectivity', include_self = False).toarray() * cloud_label
     #Compute the degree of each point of cloud 1
     degree = np.sum(connectivity, axis=1)[cloud_label==1]
     #Compute overlap percentage
