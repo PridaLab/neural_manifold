@@ -35,7 +35,7 @@ def LT_manifold_pipeline(data_dir,mouse, save_dir, **kwargs):
     # %% 1.LOAD DATA
     local_starttime = timeit.default_timer()
     print('\n### 1. LOAD DATA ###')
-    print('0.1 Searching & loading data in directory:', data_dir)
+    print('1 Searching & loading data in directory:\n', data_dir)
     df_og = gu.load_files(data_dir, '*_PyalData_struct*.mat', verbose=kwargs["verbose"])
     kwargs["fnames"] = list(df_og.keys())
     if kwargs["time_verbose"]:
@@ -942,7 +942,7 @@ def _compute_umap_LT(df_dict, field, umap_field, still_dict, fail_dict, neighbou
                                                                 min_dist=min_dist, verbose=kwargs["verbose"])  
                 if umap_dim<3:
                     umap_dim = 3
-                models_umap[file]["dim_num_trust"] = num_trust
+                models_umap["dim_num_trust"] = num_trust
         else:
             umap_dim = kwargs["umap_dims"]
         model_umap = umap.UMAP(n_neighbors = nn, n_components = umap_dim, 
