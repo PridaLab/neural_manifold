@@ -4,8 +4,6 @@ Created on Thu Feb 24 15:39:29 2022
 
 @author: JulioEI
 """
-
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +16,7 @@ from neural_manifold.pipelines.LT_manifold_pipeline import LT_manifold_pipeline
 from neural_manifold.pipelines.LT_sI_pipeline import compute_sI
 import neural_manifold.decoders as dec
 
-save_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\results'
+save_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\results\\all_data'
 ###############################################################################
 #                              MANIFOLD STUDY                                 #
 ###############################################################################
@@ -27,7 +25,7 @@ params = {
     #general params
     'keep_only_moving': False,
     'max_session_length': 'adapt_to_min',
-    'check_inner_dim': False,
+    'check_inner_dim': True,
     'compute_place_cells': False,
     #spike field info
     'spikes_field': "Inscopix_events_spikes",

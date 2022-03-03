@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import pickle
 import copy
 
-
 from neural_manifold import general_utils as gu
 from neural_manifold.pipelines.LT_manifold_pipeline import LT_manifold_pipeline
 from neural_manifold.pipelines.LT_sI_pipeline import compute_sI
