@@ -63,7 +63,6 @@ def assign_labels(data, kn):
 
 
 def compute_pointCloudsOverlap(cloud1, cloud2, k):
-    breakpoint()
     #Stack both clouds
     cloud_all = np.vstack((cloud1, cloud2))
     #Create cloud label
