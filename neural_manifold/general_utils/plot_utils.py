@@ -10,8 +10,8 @@ Created on Fri Feb 18 16:23:28 2022
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import pyaldata as pyd
 
+from neural_manifold.general_utils import data_preprocessing as dp
 # %%
 ###########################################################################
 #                           PLOT FUNCTIONS
@@ -82,10 +82,10 @@ def plot_2D_embedding_LT(dict_df, embedding_field, gradient_field= "posx", mouse
         count +=1
         n_dims = pd_struct[embedding_field][0].shape[1]
         fig, ax = plt.subplots(n_dims,n_dims,figsize=(n_dims*2,n_dims*2))
-        struct_left = pyd.select_trials(dict_df[fname], "dir == 'L'")
-        emb_left = pyd.concat_trials(struct_left, embedding_field)
-        struct_right = pyd.select_trials(dict_df[fname], "dir == 'R'")
-        emb_right = pyd.concat_trials(struct_right, embedding_field)
+        struct_left = dp.select_trials(dict_df[fname], "dir == 'L'")
+        emb_left = np.concatenate(struct_left[embedding_field].values, axis=0)
+        struct_right = dp.select_trials(dict_df[fname], "dir == 'R'")
+        emb_right = np.concatenate(struct_right[embedding_field].values, axis=0)
         
         if 'pos' in gradient_field:
             pos_all = np.concatenate(pd_struct["pos"].values, axis=0)
@@ -152,23 +152,23 @@ def plot_3D_embedding_LT(dict_df, embedding_field, gtitle, gradient_field= "pos"
         
     fig = plt.figure(figsize = (16,int(np.ceil(16*n_rows/n_cols))))
     for col, fname in enumerate(fnames):
-        struct_left = pyd.select_trials(dict_df[fname], "dir == 'L'")
-        concat_emb_left = pyd.concat_trials(struct_left, embedding_field)
+        struct_left = dp.select_trials(dict_df[fname], "dir == 'L'")
+        concat_emb_left = np.concatenate(struct_left[embedding_field].values, axis=0)
         if "time" in gradient_field: 
             struct_left["index_mat"] = [np.zeros((struct_left["pos"][idx].shape[0],1))+struct_left["trial_id"][idx] 
                                                                                 for idx in range(struct_left.shape[0])]
-            concat_pos_left = pyd.concat_trials(struct_left, "index_mat")
+            concat_pos_left = np.concatenate(struct_left["index_mat"].values, axis=0)
         else:
-            concat_pos_left = pyd.concat_trials(struct_left, gradient_field)
+            concat_pos_left = np.concatenate(struct_left[gradient_field].values, axis=0)
         
-        struct_right = pyd.select_trials(dict_df[fname], "dir == 'R'")
-        concat_emb_right = pyd.concat_trials(struct_right, embedding_field)
+        struct_right = dp.select_trials(dict_df[fname], "dir == 'R'")
+        concat_emb_right = np.concatenate(struct_right[embedding_field].values, axis=0)
         if "time" in gradient_field:
             struct_right["index_mat"] = [np.zeros((struct_right["pos"][idx].shape[0],1))+struct_right["trial_id"][idx] 
                                                                                  for idx in range(struct_right.shape[0])]
-            concat_pos_right = pyd.concat_trials(struct_right, "index_mat") 
+            concat_pos_right = np.concatenate(struct_right["index_mat"].values, axis=0) 
         else:
-            concat_pos_right = pyd.concat_trials(struct_right, gradient_field) 
+            concat_pos_right = np.concatenate(struct_right[gradient_field].values, axis=0) 
         
         if "pos" in gradient_field:
             cbar_label = "Position (cm)"
@@ -231,20 +231,20 @@ def plot_3D_embedding_LT_v2(dict_df, embedding_field, gtitle, gradient_field= "p
     n_rows = 2
     fig = plt.figure(figsize = (16,int(np.ceil(16*n_rows/n_cols))))
     for col, fname in enumerate(fnames):
-        struct_left = pyd.select_trials(dict_df[fname], "dir == 'L'")
-        concat_emb_left = pyd.concat_trials(struct_left, embedding_field)
+        struct_left = dp.select_trials(dict_df[fname], "dir == 'L'")
+        concat_emb_left = np.concatenate(struct_left[embedding_field].values, axis=0)
         struct_left["index_mat"] = [np.zeros((struct_left["pos"][idx].shape[0],1))+struct_left["trial_id"][idx] 
                                                                              for idx in range(struct_left.shape[0])]
-        concat_time_left = pyd.concat_trials(struct_left, "index_mat")
-        concat_pos_left = pyd.concat_trials(struct_left, gradient_field)
+        concat_time_left = np.concatenate(struct_left["index_mat"].values, axis=0)
+        concat_pos_left = np.concatenate(struct_left[gradient_field].values, axis=0)
         
-        struct_right = pyd.select_trials(dict_df[fname], "dir == 'R'")
-        concat_emb_right = pyd.concat_trials(struct_right, embedding_field)
+        struct_right = dp.select_trials(dict_df[fname], "dir == 'R'")
+        concat_emb_right = np.concatenate(struct_right[embedding_field].values, axis=0)
         
         struct_right["index_mat"] = [np.zeros((struct_right["pos"][idx].shape[0],1))+struct_right["trial_id"][idx] 
                                                                                  for idx in range(struct_right.shape[0])]
-        concat_time_right = pyd.concat_trials(struct_right, "index_mat") 
-        concat_pos_right = pyd.concat_trials(struct_right, gradient_field) 
+        concat_time_right = np.concatenate(struct_right["index_mat"].values, axis=0) 
+        concat_pos_right = np.concatenate(struct_right[gradient_field].values, axis=0) 
                     
         ax = plt.subplot(n_rows,n_cols,col+1, projection='3d')
         p = ax.scatter(*concat_emb_left[:,:3].T, c= concat_pos_left[:,0],edgecolors='face', 
@@ -290,7 +290,8 @@ def plot_3D_embedding_LT_v2(dict_df, embedding_field, gtitle, gradient_field= "p
     fig.tight_layout()
     plt.ion()
     plt.show()   
-    
+
+'''
 def plot_trajectory_embedding_LT(dict_df, embedding_field, gtitle):
     n_cols = len(dict_df)    
     fnames = list(dict_df.keys())
@@ -301,8 +302,8 @@ def plot_trajectory_embedding_LT(dict_df, embedding_field, gtitle):
     fig = plt.figure(figsize = (16,int(np.ceil(16/n_cols))))
     for col, fname in enumerate(fnames):
         ax = plt.subplot(1,n_cols,col+1)
-        concat_emb =  pyd.concat_trials(dict_df[fname], embedding_field)
-        concat_pos =  pyd.concat_trials(dict_df[fname], "pos")
+        concat_emb =  np.concatenate(dict_df[fname][embedding_field].values, axis=0)
+        concat_pos =  np.concatenate(dict_df[fname]["pos"].values, axis=0)
         av_emb_per_dir = pyd.trial_average(dict_df[fname], "dir")
         ax.scatter(*concat_emb[:,:2].T, c = concat_pos[:,0],edgecolors='face', alpha=0.25, s=40,linewidths=0)
         for idx, dir_emb in enumerate(av_emb_per_dir[embedding_field]):
@@ -327,7 +328,7 @@ def plot_trajectory_embedding_LT(dict_df, embedding_field, gtitle):
     fig.tight_layout()
     plt.ion()
     plt.show()        
-
+'''
 def plot_PCA_variance(models_pca,max_pc, max_cumu_pc, pca_dims, gtitle):
     n_cols = len(models_pca)    
     fnames = list(models_pca.keys())
