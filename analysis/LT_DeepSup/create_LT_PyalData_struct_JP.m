@@ -1,6 +1,6 @@
 close all; clear all; clc;
 %%
-data_file =  'GC2_castle_alo_events_s2.mat';
+data_file =  'CZ4_Rot_events_s7.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -35,7 +35,6 @@ if ~isempty(art_idx)
          end
     end
 end
-
 art_idx = (1:length(tracesEvents.velocity));
 art_idx = art_idx(any(tracesEvents.position(:,1)<0, 2));
 og_length = length(tracesEvents.velocity);
@@ -130,7 +129,6 @@ end
 %% Get left2right and right2left structures
 rightDep(rightDep> max(leftArrival(end), rightArrival(end)))=[];
 leftDep(leftDep> max(leftArrival(end), rightArrival(end)))=[];
-
 % check left to left
 L2L = [];
 visit = 1;
@@ -197,9 +195,6 @@ while stp==0
     end
     if visit==length(L2R(:,1)); stp=1; end
 end
-%for visit = 1:size(L2R,1)
-%    L2R(visit,3) = min(tracesEvents.reward(tracesEvents.reward>=L2R(visit,2)-3));
-%end
 % right to left
 leftArrival(leftArrival<rightDep(1))=[];
 for visit=1:length(leftArrival)
@@ -228,10 +223,6 @@ while stp==0
    
     if visit==length(R2L(:,1)); stp=1; end
 end
-%for visit = 1:size(R2L,1)
-%    R2L(visit,3) = min(tracesEvents.reward(tracesEvents.reward>=R2L(visit,2)-3));
-%end
-fprintf('\nL2L: %i\nR2R: %i\nL2R: %i\nR2L: %i\n', size(L2L,1), size(R2R,1), size(L2R,1), size(R2L,1))
 %{
 dur_L2R = (L2R(:,2)-L2R(:,1))/20;
 for trial = 1:length(dur_L2R)
@@ -267,21 +258,171 @@ for trial = 1:length(dur_R2L)
     end
 end
 %}
-%% Create structure
-%code: 0-static, 1-L2R, 2-R2L, 3-L2L, 4-R2R, 5-RewardL2R, 6-RewardR2L
-L2R(:,4) = 1;
-R2L(:,4) = 2;
+%% Adjust start and end trials manually
+%smooth_vel = movmean(tracesEvents.velocity, round(tracesEvents.sF*1));
+%vel_min = prctile(smooth_vel, 5);
+%el_max = prctile(smooth_vel, 95);
+%pos_min = prctile(tracesEvents.position(:,1), 5);
+%pos_max = prctile(tracesEvents.position(:,1), 95);
+%fh2 = figure;
+for trial = 1:length(L2R)
+    pos_5cm = find(tracesEvents.position(L2R(trial,1):L2R(trial,2))>leftLim+10);
+    pos_5cm = pos_5cm(1);
+    trial_st = max([0, pos_5cm- round(round(tracesEvents.sF))]);
+    L2R(trial,1) = L2R(trial,1)+trial_st;
+    %{
+    hold off;
+    plot(t(L2R(trial,1):L2R(trial,2)), tracesEvents.position(L2R(trial,1):L2R(trial,2)), 'LineWidth', 2)
+    hold on
+    plot(t(L2R(trial,1):L2R(trial,2)), smooth_vel(L2R(trial,1):L2R(trial,2)), 'LineWidth', 2)
+    plot(t(L2R(trial,1):L2R(trial,1)+trial_st),tracesEvents.position(L2R(trial,1):L2R(trial,1)+trial_st), 'r', 'LineWidth', 2)
+    ylim([pos_min, pos_max]);
+    title(int2str(trial))
+    [x,y] = getpts(fh2);
+    if ~isempty(x)
+        if length(x) == 2
+            x_left = min(x);
+            x_right = max(x);
+            L2R(trial,1) = max([L2R(trial,1),round(x_left*tracesEvents.sF)]);
+            L2R(trial,2) = min([L2R(trial,2),round(x_right*tracesEvents.sF)]);
+        elseif length(x) == 1
+            dist_to_edges = abs(L2R(trial,:)-x*tracesEvents.sF);
+            if diff(dist_to_edges)>20
+                [~, ind] = min(dist_to_edges);
+            else %consider also y-dim
+                dist_to_edges_y = abs(tracesEvents.position(L2R(trial,:),1)'-y);
+                [~, ind] = min(sqrt(dist_to_edges.^2 + dist_to_edges_y.^2));
+            end
+            if ind == 1 %x_left
+                L2R(trial,1) = max([L2R(trial,1),round(x*tracesEvents.sF)]);
+            else
+                L2R(trial,2) = min([L2R(trial,2),round(x*tracesEvents.sF)]);
+            end
+        end    
+    end
+    %}
+end
+for trial = 1:length(R2L)
+    pos_5cm = find(tracesEvents.position(R2L(trial,1):R2L(trial,2))>rightLim-10);
+    pos_5cm = pos_5cm(end);
+    trial_st = max([0, pos_5cm-round(round(tracesEvents.sF))]);
+    R2L(trial,1) = R2L(trial,1)+trial_st;
+    %{
+    hold off;
+    plot(t(R2L(trial,1):R2L(trial,2)), tracesEvents.position(R2L(trial,1):R2L(trial,2)), 'LineWidth', 2)
+    hold on
+    plot(t(R2L(trial,1):R2L(trial,2)), smooth_vel(R2L(trial,1):R2L(trial,2)), 'LineWidth', 2)
+    plot(t(R2L(trial,1):R2L(trial,1)+trial_st),tracesEvents.position(R2L(trial,1):R2L(trial,1)+trial_st), 'r', 'LineWidth', 2)
+    ylim([pos_min, pos_max]);
+    title(int2str(trial))
+    [x,y] = getpts(fh2);
+    if ~isempty(x)
+        if length(x) == 2
+            x_left = min(x);
+            x_right = max(x);
+            R2L(trial,1) = max([R2L(trial,1),round(x_left*tracesEvents.sF)]);
+            R2L(trial,2) = min([R2L(trial,2),round(x_right*tracesEvents.sF)]);
+        elseif length(x) == 1
+            dist_to_edges = abs(R2L(trial,:)-x*tracesEvents.sF);
+            if diff(dist_to_edges)>20
+                [~, ind] = min(dist_to_edges);
+            else %consider also y-dim
+                dist_to_edges_y = abs(tracesEvents.position(R2L(trial,:),1)'-y);
+                [~, ind] = min(sqrt(dist_to_edges.^2 + dist_to_edges_y.^2));
+            end
+            if ind == 1 %x_left
+                R2L(trial,1) = max([R2L(trial,1),round(x*tracesEvents.sF)]);
+            else
+                R2L(trial,2) = min([R2L(trial,2),round(x*tracesEvents.sF)]);
+            end
+        end    
+    end
+    %}
+end
+%% Check vicarious trials
+L2Rv = [];
+trial = 1;
+while trial<=length(L2R)
+    pos = tracesEvents.position(L2R(trial,1):L2R(trial,2),1);
+    vel = movmean(tracesEvents.velocity(L2R(trial,1):L2R(trial,2)), round(tracesEvents.sF*1));
+    vel_middle_st = find(pos<prctile(pos,40));
+    vel_middle_st_idx = find(diff(vel_middle_st)>1);
+    if ~isempty(vel_middle_st_idx)
+        vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
+    else
+        vel_middle_st = vel_middle_st(end);
+    end
+    vel_middle_en = find(pos>prctile(pos,60));
+    vel_middle_en_idx = find(diff(vel_middle_en)>1);
+    if ~isempty(vel_middle_en_idx)
+        vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
+    else
+        vel_middle_en = vel_middle_en(1);
+    end
+    middle_vel = mean(vel(vel_middle_st:vel_middle_en));
+    edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
+    if middle_vel<=0.7*edges_vel
+        L2Rv(end+1,:) = L2R(trial,:);
+        L2R(trial,:) = [];
+    else
+        trial = trial+1;
+
+    end
+end
+
+R2Lv = [];
+trial = 1;
+middle_vel_hist = zeros(size(R2L,1),2);
+while trial<=length(R2L)
+    pos = tracesEvents.position(R2L(trial,1):R2L(trial,2),1);
+    vel = movmean(tracesEvents.velocity(R2L(trial,1):R2L(trial,2)), round(tracesEvents.sF*1));
+    vel_middle_st = find(pos>prctile(pos,60));
+    vel_middle_st_idx = find(diff(vel_middle_st)>1);
+    if ~isempty(vel_middle_st_idx)
+        vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
+    else
+        vel_middle_st = vel_middle_st(end);
+    end
+    vel_middle_en = find(pos<prctile(pos,35));
+    vel_middle_en_idx = find(diff(vel_middle_en)>1);
+    if ~isempty(vel_middle_en_idx)
+        vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
+    else
+        vel_middle_en = vel_middle_en(1);
+    end
+    
+    middle_vel = mean(vel(vel_middle_st:vel_middle_en));
+    edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
+    if middle_vel<=0.7*edges_vel
+        R2Lv(end+1,:) = R2L(trial,:);
+        R2L(trial,:) = [];
+    else
+        trial = trial+1;
+    end
+end
+fprintf('\nL2L: %i\nR2R: %i\nL2Rv: %i\nR2Lv: %i\nL2R: %i\nR2L: %i\n', size(L2L,1), ...
+                            size(R2R,1), size(L2Rv,1), size(R2Lv,1),size(L2R,1), size(R2L,1))
+
+%% 
+%code: 0-static, 1-L2R, 2-R2L, 3-L2L, 4-R2R, 5-L2Rv, 6-R2Lv
+L2R(:,3) = 1;
+R2L(:,3) = 2;
 if ~isempty(L2L)
-    L2L(:,3) = 0;
-    L2L(:,4) = 3;
+    L2L(:,3) = 3;
 end
 if ~isempty(R2R)    
-    R2R(:,3) = 0;
-    R2R(:,4) = 4;
+    R2R(:,3) = 4;
 end
-cState = [R2R;L2L;L2R;R2L];
+if ~isempty(L2Rv)
+    L2Rv(:,3) =5;
+end
+if ~isempty(R2Lv)
+    R2Lv(:,3) =6;
+end
+cState = [R2R;L2L;L2R;R2L;L2Rv;R2Lv];
 [~,ord] = sort(cState(:,1),1);
 cState = cState(ord,:);
+
 %add inbetween static periods and rewards
 cState_exp = [];
 entry = 1;
@@ -289,31 +430,30 @@ for trial = 1:size(cState,1)
     cState_exp(entry,:) = cState(trial, :);
     if trial<size(cState,1)
         entry = entry+1; %static
-        cState_exp(entry,:) = [cState(trial,2)-1+1, cState(trial+1,1)-1,nan, 0];
+        cState_exp(entry,:) = [cState(trial,2)-1+1, cState(trial+1,1)-1,0];
     end
     entry = entry+1;
 end
 
 if cState_exp(1,1)>1
-    cState_exp = [1, cState_exp(1,1)-1, NaN, 0; cState_exp];
+    cState_exp = [1, cState_exp(1,1)-1, 0; cState_exp];
 end
 if cState_exp(end,2)<size(tracesEvents.position,1)
-    cState_exp = [cState_exp; cState_exp(end,2)+1, size(tracesEvents.position,1), NaN, 0];
+    cState_exp = [cState_exp; cState_exp(end,2)+1, size(tracesEvents.position,1), 0];
 end
-
 %% Plot
 t = (0:size(tracesEvents.position,1)-1)'./tracesEvents.sF;
 figure
 ax1 = subplot(1,2,1);
 hold on;
 for ii = 1:size(cState_exp,1)-1
-    if cState_exp(ii,4) == 1
+    if cState_exp(ii,3) == 1
         col = '#3C93C2';
-    elseif cState_exp(ii,4) == 2
+    elseif cState_exp(ii,3) == 2
         col = '#FEB24C';
-    elseif cState_exp(ii,4) == 3 || cState_exp(ii,4) == 4
+    elseif cState_exp(ii,3) == 3 || cState_exp(ii,3) == 4
         col = '#CD071E';
-    elseif cState_exp(ii,4) == 5 || cState_exp(ii,4) == 6
+    elseif cState_exp(ii,3) == 5 || cState_exp(ii,3) == 6
         col = '#F76DBF';
     else
         col = [0.7,0.7,0.7];
@@ -330,20 +470,20 @@ set(gca,'TickDir','out')
 ax2 = subplot(1,2,2);
 hold on;
 for ii = 1:size(cState_exp,1)-1
-    if cState_exp(ii,4) == 1
+    if cState_exp(ii,3) == 1
         col = '#3C93C2';
-    elseif cState_exp(ii,4) == 2
+    elseif cState_exp(ii,3) == 2
         col = '#FEB24C';
-    elseif cState_exp(ii,4) == 3 || cState_exp(ii,4) == 4
+    elseif cState_exp(ii,3) == 3 || cState_exp(ii,3) == 4
         col = '#CD071E';
-    elseif cState_exp(ii,4) == 5 || cState_exp(ii,4) == 6
+    elseif cState_exp(ii,3) == 5 || cState_exp(ii,3) == 6
         col = '#F76DBF';
     else
         col = [0.7,0.7,0.7];
     end
     area([cState_exp(ii,1)/tracesEvents.sF, cState_exp(ii,2)/tracesEvents.sF], [800, 800], 'FaceAlpha', 0.75, 'FaceColor', col)
 end
-plot(t, tracesEvents.velocity, 'k', 'LineWidth', 2)
+plot(t, smoothdata(tracesEvents.velocity, 40, 'gaussian'), 'k', 'LineWidth', 1)
 xlim([0, 80])
 ylim([0, 100])
 xlabel('Time (s)')
@@ -356,22 +496,26 @@ linkaxes([ax1,ax2],'x');
 %% create trial structure
 for ii = 1:size(cState_exp,1)-1
     trial_data(ii).mouse = tracesEvents.mouse;
-    trial_data(ii).date = '2021';
+    trial_data(ii).date = '2022';
     trial_data(ii).task = 'Linear-Track';
     trial_data(ii).session =  tracesEvents.session;
 
     trial_data(ii).trial_id = ii;
-    trial_data(ii).mov = double(cState_exp(ii,4)>0);
-    trial_data(ii).cross_middle =  double(cState_exp(ii,4)>0);
+    trial_data(ii).mov = double(cState_exp(ii,2)>0);
+    trial_data(ii).cross_middle =  double(cState_exp(ii,3)>0);
 
-    if cState_exp(ii,4) == 1
+    if cState_exp(ii,3) == 1
         trial_data(ii).dir = 'L';
-    elseif cState_exp(ii,4) == 2
+    elseif cState_exp(ii,3) == 2
         trial_data(ii).dir = 'R';
-    elseif cState_exp(ii,4) == 3
+    elseif cState_exp(ii,3) == 3
         trial_data(ii).dir = 'L2L';
-    elseif cState_exp(ii,4) == 4
+    elseif cState_exp(ii,3) == 4
         trial_data(ii).dir = 'R2R';
+    elseif cState_exp(ii,3) == 5
+        trial_data(ii).dir = 'L2Rv';
+    elseif cState_exp(ii,3) == 6
+        trial_data(ii).dir = 'R2Lv';    
     else
         trial_data(ii).dir = 'N';
     end
