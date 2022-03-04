@@ -1,4 +1,4 @@
-mouse = 'GC1';
+mouse = 'CZ4';
 ltm = load([mouse,'_LTm_events_s5.mat']);
 rot = load([mouse, '_Rot_events_s7.mat']);
 
