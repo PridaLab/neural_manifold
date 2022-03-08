@@ -24,7 +24,7 @@ steps["compute_decoders_to_shift"] = False
 steps["compute_decoders_cross_session"] = False
 steps["compute_decoders_cross_animal"] = False
 verbose = True
-save_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\results_pipeline\\move_data'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results_pipeline/move_data'
 if not steps["manifold_pipeline"]:
     mouse_M2019 = 'M2019'
     results_dir_M2019 = os.path.join(save_dir, "M2019_170122_100510")
@@ -75,37 +75,37 @@ if steps["manifold_pipeline"]:
         'min_dist_umap_traces': 0.75
         }
     # M2019
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2019' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2019' 
     mouse_M2019 = 'M2019'
     results_dir_M2019, M2019_dict = LT_manifold_pipeline(data_dir, mouse_M2019, save_dir, **params);
     plt.close('all')
     # M2021
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2021' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2021' 
     mouse_M2021 = 'M2021'
     results_dir_M2021, M2021_dict = LT_manifold_pipeline(data_dir, mouse_M2021, save_dir, **params);
     plt.close('all')
     # M2022
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2022' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2022' 
     mouse_M2022 = 'M2022'
     results_dir_M2022, M2022_dict = LT_manifold_pipeline(data_dir, mouse_M2022, save_dir, **params);
     plt.close('all')
     # M2023
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2023' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2023' 
     mouse_M2023 = 'M2023'
     results_dir_M2023, M2023_dict = LT_manifold_pipeline(data_dir, mouse_M2023, save_dir, **params);
     plt.close('all')
     # M2024
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2024' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2024' 
     mouse_M2024 = 'M2024'
     results_dir_M2024, M2024_dict = LT_manifold_pipeline(data_dir, mouse_M2024, save_dir, **params);
     plt.close('all')
     # M2025
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2025' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2025' 
     mouse_M2025 = 'M2025'
     results_dir_M2025, M2025_dict = LT_manifold_pipeline(data_dir, mouse_M2025, save_dir, **params);
     plt.close('all')
     # M206
-    data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\Jercog_data\\LT\\2026' 
+    data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/2026' 
     mouse_M2026 = 'M2026'
     results_dir_M2026, M2026_dict = LT_manifold_pipeline(data_dir, mouse_M2026, save_dir, **params);
     plt.close('all')
