@@ -71,8 +71,6 @@ def plot_2D_embedding_DS(dict_df, embedding_field, gradient_field= "posx", mouse
                    
     fig.suptitle(fnames[0][:5]+ '_' +gradient_field)
     fig.tight_layout()
-    plt.ion()
-    plt.show()   
     if save:
         plt.savefig(os.path.join(save_dir, mouse+'_'+  embedding_field+ '_2D_' + gradient_field))
         
@@ -133,8 +131,6 @@ def plot_2D_embedding_LT(dict_df, embedding_field, gradient_field= "posx", mouse
                    
         fig.suptitle(fname)
         fig.tight_layout()
-        plt.ion()
-        plt.show() 
         if save:
             plt.savefig(os.path.join(save_dir, mouse+'_s'+  str(count) + '_' + embedding_field+ '_2D_' + gradient_field))
 
@@ -218,7 +214,7 @@ def plot_3D_embedding_LT(dict_df, embedding_field, gtitle, gradient_field= "pos"
         cbar.ax.set_ylabel(cbar_label, rotation=270)
     plt.suptitle(gtitle,fontsize=20)
     fig.tight_layout()
-    plt.ion()   
+    #plt.ion()   
    
 #plot 3D points
 def plot_3D_embedding_LT_v2(dict_df, embedding_field, gtitle, gradient_field= "pos"):
@@ -288,8 +284,7 @@ def plot_3D_embedding_LT_v2(dict_df, embedding_field, gtitle, gradient_field= "p
         cbar.ax.set_ylabel("Time (trial index)", rotation=270)
     plt.suptitle(gtitle,fontsize=20)
     fig.tight_layout()
-    plt.ion()
-    plt.show()   
+    #plt.ion()
 
 '''
 def plot_trajectory_embedding_LT(dict_df, embedding_field, gtitle):
@@ -326,7 +321,7 @@ def plot_trajectory_embedding_LT(dict_df, embedding_field, gtitle):
         ax.legend()
     plt.suptitle(gtitle,fontsize=20)
     fig.tight_layout()
-    plt.ion()
+    #plt.ion()
     plt.show()        
 '''
 def plot_PCA_variance(models_pca,max_pc, max_cumu_pc, pca_dims, gtitle):
@@ -353,8 +348,7 @@ def plot_PCA_variance(models_pca,max_pc, max_cumu_pc, pca_dims, gtitle):
         ax2.set_ylim([0, max_cumu_pc])
     plt.suptitle(gtitle, fontsize=20)
     fig.tight_layout()
-    plt.ion()
-    plt.show()
+    #plt.ion()
     
 def plot_decoder_LT(dict_df, gtitle, x_dims, color_code = ['C7', 'C4', 'C3', 'C0'], y_dim = 0, sem=True):
     lines_names = list(dict_df.keys())
@@ -397,8 +391,7 @@ def plot_decoder_LT(dict_df, gtitle, x_dims, color_code = ['C7', 'C4', 'C3', 'C0
     ax[row,col].legend(fontsize=16)
     plt.suptitle(gtitle, fontsize=20)
     plt.tight_layout()
-    plt.ion()
-    plt.show()
+    #plt.ion()
 
 def plot_internal_dim(internal_dim_dict,fnames,gtitle, m = None):
     minx = np.Inf
@@ -432,6 +425,5 @@ def plot_internal_dim(internal_dim_dict,fnames,gtitle, m = None):
     plt.ylim([miny, maxy])
     plt.legend()
     plt.title(gtitle)
-    plt.ion()
-    plt.show()
+    #plt.ion()
     
