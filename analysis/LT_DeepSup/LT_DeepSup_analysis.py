@@ -16,21 +16,22 @@ from neural_manifold.pipelines.LT_manifold_pipeline import LT_manifold_pipeline
 from neural_manifold.pipelines.LT_sI_pipeline import compute_sI
 import neural_manifold.decoders as dec
 
-save_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\results\\all_data'
+#save_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\results\\all_data'
+save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/results/move_data'
 ###############################################################################
 #                              MANIFOLD STUDY                                 #
 ###############################################################################
 #%% PARAMETERS
 params = {
     #general params
-    'keep_only_moving': False,
+    'keep_only_moving': True,
     'max_session_length': 'adapt_to_min',
     'check_inner_dim': True,
     'compute_place_cells': False,
     #spike field info
     'spikes_field': "Inscopix_events_spikes",
     'rates_kernel_std': 0.4,
-    'th_rates_freq': 0.02,
+    'th_rates_freq': 0,
     #traces field info
     'traces_field': "Inscopix_traces",
     #isomap
@@ -45,22 +46,22 @@ params = {
     'apply_same_model': True
     }
 # %% GC1
-data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\GC1' 
+data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/GC1'
 mouse_GC1 = 'GC1'
 results_dir_GC1, GC1_dict = LT_manifold_pipeline(data_dir, mouse_GC1, save_dir, **params);
 plt.close('all')
 # %% GC2
-data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\GC2' 
+data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/GC2' 
 mouse_GC2 = 'GC2'
 results_dir_GC2, GC2_dict = LT_manifold_pipeline(data_dir, mouse_GC2, save_dir, **params);
 plt.close('all')
 # %% CZ3
-data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\CZ3' 
+data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/CZ3' 
 mouse_CZ3 = 'CZ3'
 results_dir_CZ3, CZ3_dict = LT_manifold_pipeline(data_dir, mouse_CZ3, save_dir, **params);
 plt.close('all')
 # %% CZ4
-data_dir = 'E:\\Users\\Usuario\\Documents\\Spatial_navigation_project\\JP_data\\LT_inscopix\\CZ4' 
+data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/CZ4' 
 mouse_CZ4 = 'CZ4'
 results_dir_CZ4, CZ4_dict = LT_manifold_pipeline(data_dir, mouse_CZ4, save_dir, **params);
 plt.close('all')
