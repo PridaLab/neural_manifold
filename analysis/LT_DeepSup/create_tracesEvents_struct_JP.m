@@ -32,7 +32,7 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
          session_type = 'None';
      end
     if length(session_names)>1
-        if contains(session_type, 'LT_ROT', 'IgnoreCase',True)
+        if contains(session_type, 'LT_ROT', 'IgnoreCase',true)
             %get guide for first and second session files
             files_LT = files(contains({files(:).name}, session_names{1}, 'IgnoreCase',true));
             files_ROT = files(contains({files(:).name}, session_names{2}, 'IgnoreCase',true));
@@ -44,7 +44,7 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
                 error("More than one correspondance file found in the folder.")
             end
             correspondence_file_index = find(correspondence_file_index);
-            correspondence_table = readtable([files(correspondence_file_index).folder, '\',files(correspondence_file_index).name]);
+            correspondence_table = readtable([files(correspondence_file_index).folder, '/',files(correspondence_file_index).name]);
             local_to_global_guide_LT = correspondence_table{correspondence_table{:,3}==0,1:2};
             local_to_global_guide_ROT = correspondence_table{correspondence_table{:,3}==1,1:2};
             %Keep only cells that appear in both sessions
@@ -56,18 +56,18 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
             tracesEvents = get_tracesEvents(files_LT,local_to_global_guide_LT, 'LT');
             tracesEvents.mouse = mouse_name;
             tracesEvents.session = session_number(1);
-            save([save_data, '\',mouse_name,'_LTm_events_s', int2str(session_number(1)), '.mat'], "tracesEvents")
+            save([save_data, '/',mouse_name,'_LTm_events_s', int2str(session_number(1)), '.mat'], "tracesEvents")
             %ROT1
             tracesEvents = get_tracesEvents(files_ROT,local_to_global_guide_ROT, 'ROT');
             tracesEvents.mouse = mouse_name;
             tracesEvents.session = session_number(2);
-            save([save_data, '\',mouse_name,'_Rot_events_s', int2str(session_number(2)), '.mat'], "tracesEvents")
+            save([save_data, '/',mouse_name,'_Rot_events_s', int2str(session_number(2)), '.mat'], "tracesEvents")
         end
     else 
         tracesEvents = get_tracesEvents(files,[], session_names{1});
         tracesEvents.mouse = mouse_name;
         tracesEvents.session = session_number(1);
-        save([save_data, '\',mouse_name,'_', session_names{1}, '_events_s', int2str(session_number(1)), '.mat'], "tracesEvents")
+        save([save_data, '/',mouse_name,'_', session_names{1}, '_events_s', int2str(session_number(1)), '.mat'], "tracesEvents")
     end
     warning(w)
 end
@@ -87,7 +87,7 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
         error("More than one raw files found for the condition %s in the folder.", condition)
     end
     raw_file_index = find(raw_file_index);
-    raw_props_table = readtable([files(raw_file_index).folder, '\',files(raw_file_index).name]);
+    raw_props_table = readtable([files(raw_file_index).folder, '/',files(raw_file_index).name]);
     raw_props_mat = (0:size(raw_props_table,1)-1)';
     accepted_cells = cellfun(@(c) contains(c,'accepted'), raw_props_table{:,2});
     accepted_to_local_guide = [(0:sum(accepted_cells)-1)',raw_props_mat(accepted_cells)];
@@ -117,12 +117,11 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
         error("More than one traces files found for the condition %s in the folder.", condition)
     end
     traces_file_index = find(traces_file_index);
-    traces_table = readtable([files(traces_file_index).folder, '\',files(traces_file_index).name]);
+    traces_table = readtable([files(traces_file_index).folder, '/',files(traces_file_index).name]);
     tracesEvents.traces = traces_table{:,accepted_to_global_guide(:,2)+2};
     %Get frequency
     times = traces_table{:,1};
     tracesEvents.sF = 1/median(diff(times));
-
     %Load spikes
     spikes_file_index = contains({files(:).name}, 'spikes', 'IgnoreCase',true) ...
                             .*~contains({files(:).name}, 'props', 'IgnoreCase',true);
@@ -132,8 +131,9 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     elseif sum(spikes_file_index)>1
         error("More than one spikes files found for the condition %s in the folder.", condition)
     end
+    keyboard;
     spikes_file_index = find(spikes_file_index);
-    spikes_table = readtable([files(spikes_file_index).folder, '\',files(spikes_file_index).name]);
+    spikes_table = readtable([files(spikes_file_index).folder, '/',files(spikes_file_index).name]);
     spikes_bi_array = zeros(size(traces_table,1), size(raw_props_table,1));
     spikes_amp_array = zeros(size(traces_table,1), size(raw_props_table,1));
     [~, spikes_index]  = min(abs(spikes_table{:,1}-times'),[],2);
@@ -155,7 +155,7 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
         error("More than one events files found for the condition %s in the folder.", condition)
     end
     events_file_index = find(events_file_index);
-    events_table = readtable([files(events_file_index).folder, '\',files(events_file_index).name]);
+    events_table = readtable([files(events_file_index).folder, '/',files(events_file_index).name]);
     events_array = zeros(size(traces_table,1), size(traces_table,2)-1);
 
     [~, events_index]  = min(abs(events_table{:,1}-times'),[],2);
@@ -177,10 +177,10 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     end
     position_file_index = find(position_file_index);
     if contains(files(position_file_index).name(end-3:end), '.csv')
-        position_table = readtable([files(position_file_index).folder, '\',files(position_file_index).name]);
+        position_table = readtable([files(position_file_index).folder, '/',files(position_file_index).name]);
         tracesEvents.position = position_table{:,:};
     else
-        temp = load([files(position_file_index).folder, '\',files(position_file_index).name]);
+        temp = load([files(position_file_index).folder, '/',files(position_file_index).name]);
         field_temp = fieldnames(temp);
         for field = 1:size(field_temp,1)
             if contains(field_temp{field,1}, 'position', 'IgnoreCase', true)
@@ -240,7 +240,7 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
                            .*contains({files(:).name}, 'contours', 'IgnoreCase',true);
     if sum(image_file_index)>0
         image_file_index = find(image_file_index);
-        image = Tiff([files(image_file_index).folder, '\',files(image_file_index).name]);
+        image = Tiff([files(image_file_index).folder, '/',files(image_file_index).name]);
         imageData = read(image);
         tracesEvents.cell_image = imageData;
         close(image);
@@ -251,7 +251,7 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
                            .*contains({files(:).name}, 'frame', 'IgnoreCase',true);
     if sum(image_file_index)>0
         image_file_index = find(image_file_index);
-        image = Tiff([files(image_file_index).folder, '\',files(image_file_index).name]);
+        image = Tiff([files(image_file_index).folder, '/',files(image_file_index).name]);
         imageData = read(image);
         tracesEvents.frame_image = imageData;
         close(image);
