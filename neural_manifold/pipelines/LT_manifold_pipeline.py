@@ -418,7 +418,7 @@ def _validate_inputs(kwargs):
         kwargs["spikes_field"] = "ML_spikes" #check that field exists or if similar with spikes
     #add name of future rates field
     if 'rates_field' not in kwargs:
-        kwargs["rates_field"] = kwargs["spikes_field"][:kwargs["spikes_field"].find('_')] + "_rates"
+        kwargs["rates_field"] = kwargs["spikes_field"][:kwargs["spikes_field"].rfind('_')] + "_rates"
     #std in seconds of of gaussian window to compute firing rates
     if 'rates_kernel_std' not in kwargs:
         kwargs["rates_kernel_std"] = 0.05 #s 
