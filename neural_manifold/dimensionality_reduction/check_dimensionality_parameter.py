@@ -20,7 +20,6 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import umap
-from umap import validation
 from sklearn.metrics import median_absolute_error, explained_variance_score
 
 
@@ -170,7 +169,7 @@ def check_kernel_size(input_object = None, spikes_signal = None, traces_signal =
             sI_array[behavioral_index, kernel_index], _, _ = sI.compute_structure_index(emb_memory[:,:,kernel_index],
                                                                                behavioral_values, 20, emb_space,
                                                                                0, vmin= minVal, vmax = maxVal)
-        
+            
         #compute decoder error
         R2s_temp = dec.decoders_1D(X_signal, input_label = behavioral_signal, emb_list = ["umap"], input_trial = trial_signal,
                                     n_dims = ndim, n_splits = n_splits, verbose = verbose)
@@ -178,5 +177,6 @@ def check_kernel_size(input_object = None, spikes_signal = None, traces_signal =
         for signal_idx, signal_name in enumerate(list(R2s_temp.keys())):
             for dec_idx, dec_name in enumerate(list(R2s_temp[signal_name].keys())):
                 R2s[:,:,:, signal_idx, dec_idx, kernel_index] = R2s_temp[signal_name][dec_name]
+                
                 
     return signal_comparison, dim_dict, emb_memory, trust, sI_array, R2s
