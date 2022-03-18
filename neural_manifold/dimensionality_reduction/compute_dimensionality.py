@@ -15,7 +15,7 @@ from sklearn.manifold import Isomap
 from scipy.stats import pearsonr
 
 import umap
-from umap import validation
+#from umap import validation
 from kneed import KneeLocator
 import random
 
@@ -23,6 +23,7 @@ import random
 from neural_manifold import general_utils as gu #translators (from Dataframe to np.ndarray)
 from neural_manifold import structure_index as sI 
 from neural_manifold.decoders import decoders_1D
+from neural_manifold.dimensionality_reduction import validation as dim_validation 
 
 
 def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**5, verbose=False):
@@ -177,13 +178,17 @@ def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10
     #check if user wants the different embedings backs
     if return_emb:
         return_emb_list = list()
+    #compute ranking order of source signal
+    if verbose:
+        print('Computing ranking order of source signal')
+    signal_indices = dim_validation.compute_rank_indices(signal)
     #initialize variables 
     num_trust = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
         if verbose:
             print('Checking dimension %i ' %(dim), sep='', end = '')
         emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(signal)
-        num_trust[dim-1,0] = validation.trustworthiness_vector(signal, emb ,n_neigh)[-1]
+        num_trust[dim-1,0] = dim_validation.trustworthiness_vector(signal, emb ,n_neigh, indices_source = signal_indices)[-1]
         if return_emb:
             return_emb_list.append(emb)
         if dim>1:
@@ -207,6 +212,99 @@ def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10
         return dim, num_trust, return_emb_list
     else:
         return dim, num_trust
+
+def compute_umap_continuity_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
+    '''Compute dimensionality of data array according to UMAP continuity (see Venna, Jarkko, and Samuel Kaski.
+    "Local multidimensional scaling with controlled tradeoff between trustworthiness and continuity." Proceedings 
+    of 5th Workshop on Self-Organizing Maps. 2005.)
+    
+    Parameters:
+    -----------
+        input_object (DataFrame or numpy Array): object containing the signal one wants to project using UMAP 
+                        to estimate dimensionality.
+        
+    Optional parameters:
+    -------------------
+        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
+                        to None, as per default).
+        
+        n_neigh (float): number of neighbours used to compute UMAP projection.
+        
+        max_dim (int): maximum number of dimensions to check (note this parameters is the main time-expensive)
+        
+        min_dist (float): minimum distance used to compute UMAP projection (values in (0,1]))
+    
+        return_emb (boolean): boolean specifing whether or not to return all UMAP embeddings computed.
+        
+        verbose (boolean): boolean indicating whether to pring verbose or not.
+                           
+    Returns:
+    --------
+        dim (int): dimensionality of the data according to UMAP trustworthiness.
+        
+        num_cont (array): array containing the trustworthiness values of each dimensionality iteration. This
+                        array is the one used to find the knee defining the dimensionality of the data
+                        
+        return_emb_list (list): list containing the UMAP projections computed for each of the dimensionalities.
+                        (only applicable if input parameter 'return_emb' set to True)
+    '''
+    #Check inputs
+    if isinstance(input_object, pd.DataFrame):
+        signal = gu.dataframe_to_1array_translator(input_object,field)
+    elif isinstance(input_object,np.ndarray):
+        signal = copy.deepcopy(input_object)
+    else:
+        raise ValueError("Input object has to be a dataframe or a numpy array.")
+    #Check consistency of maximum dimensionality
+    if max_dim>signal.shape[1]:
+        if verbose:
+            print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
+                          "dimensions (%i). Setting the first to the later." %(signal.shape[1]))
+        max_dim = signal.shape[1]
+    #Check number of neighbours
+    if n_neigh<1:
+        if verbose:
+           print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
+        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
+        if verbose:
+            print("Resulting in %i neighbours." %(n_neigh))
+    #check if user wants the different embedings backs
+    if return_emb:
+        return_emb_list = list()
+    #compute ranking order of source signal
+    if verbose:
+        print('Computing ranking order of source signal')
+    #initialize variables 
+    num_cont = np.zeros((max_dim,1))*np.nan
+    for dim in range(1, max_dim+1):
+        if verbose:
+            print('Checking dimension %i ' %(dim), sep='', end = '')
+        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(signal)
+        num_cont[dim-1,0] = dim_validation.continuity_vector(signal, emb ,n_neigh)[-1]
+        if return_emb:
+            return_emb_list.append(emb)
+        if dim>1:
+            red_error = abs(num_cont[dim-1,0]-num_cont[dim-2,0])
+            if verbose:
+                print(': Error improvement of %.4f' %red_error, sep='')
+        else:
+            if verbose:
+                print('')
+    dim_space = np.linspace(1,max_dim, max_dim).astype(int)        
+    kl = KneeLocator(dim_space, num_cont[:,0], curve = "concave", direction = "increasing")
+    if kl.knee:
+        dim = kl.knee
+        if verbose:
+            print('Final dimension: %d - Final error of %.4f' %(dim, 1-num_cont[dim-1,0]))
+    else:
+        dim = np.nan
+        if verbose:
+            print('Could estimate final dimension (knee not found). Returning nan.')
+    if return_emb:
+        return dim, num_cont, return_emb_list
+    else:
+        return dim, num_cont
+
 
 
 def compute_isomap_resvar_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
