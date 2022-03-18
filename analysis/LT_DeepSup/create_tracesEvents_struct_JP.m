@@ -131,7 +131,6 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     elseif sum(spikes_file_index)>1
         error("More than one spikes files found for the condition %s in the folder.", condition)
     end
-    keyboard;
     spikes_file_index = find(spikes_file_index);
     spikes_table = readtable([files(spikes_file_index).folder, '/',files(spikes_file_index).name]);
     spikes_bi_array = zeros(size(traces_table,1), size(raw_props_table,1));

@@ -1,6 +1,6 @@
 close all; clear all; clc;
 %%
-data_file =  'GC1_Rot_events_s7.mat';
+data_file =  'GC1_LTm_events_s5.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
