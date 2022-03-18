@@ -10,12 +10,107 @@ Created on Fri Feb 18 16:23:28 2022
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import copy
 
 from neural_manifold.general_utils import data_preprocessing as dp
 # %%
 ###########################################################################
 #                           PLOT FUNCTIONS
 ###########################################################################
+#plot 3D points
+def plot_3D_embedding(dict_df, embField, varList= ["dir_mat", "posx"], dim_to_plot = np.array([0,1,2]).T.reshape(1,-1), name_sessions = None):
+    
+    n_cols = len(dict_df)    
+    fnames = list(dict_df.keys())
+    if dim_to_plot.shape[0]<n_cols:
+        dim_to_plot = np.repeat(dim_to_plot,n_cols, axis=0)
+        
+    if 'pca' in embField:
+        axis_label = 'PC'
+    else:
+        axis_label = 'Dim'
+    n_rows = len(varList)
+    
+    fig = plt.figure(figsize = (15,int(np.ceil(15*n_rows/n_cols))))
+    for col, fname in enumerate(fnames):
+        pd_struct = copy.deepcopy(dict_df[fname])
+        emb = np.concatenate(pd_struct[embField].values, axis=0)
+        labelList = []
+        cbarLabel = []
+        for v in range(len(varList)):
+           if 'pos' in varList[v]:
+               label = np.concatenate(pd_struct["pos"].values, axis=0)
+           elif 'index_mat' in varList[v] and 'index_mat' not in pd_struct.columns:
+               pd_struct["index_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1)).astype(int)+pd_struct["trial_id"][idx] 
+                                             for idx in range(pd_struct.shape[0])]
+               label = np.concatenate(pd_struct[varList[v]].values, axis=0)
+               cbarLabel.append('Trial Index')
+           elif 'dir_mat' in varList[v] and 'dir_mat' not in pd_struct.columns:
+               pd_struct["dir_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1)).astype(int)+
+                                         ('L' in pd_struct["dir"][idx])+ 2*('R' in pd_struct["dir"][idx])
+                                             for idx in range(pd_struct.shape[0])]
+               label = np.concatenate(pd_struct[varList[v]].values, axis=0)
+               cbarLabel.append('Direction')
+
+           else:
+               label = np.concatenate(pd_struct[varList[v]].values, axis=0)
+               cbarLabel.append(varList[v])
+  
+           if label.shape[1]>0:
+               if 'posx' in varList[v]:
+                   label = label[:,0].reshape(-1,1)
+                   cbarLabel.append('x-position (cm)')
+               elif 'posy' in varList[v]:
+                   label = label[:,1].reshape(-1,1)
+                   cbarLabel.append('y-position (cm)')
+           labelList.append(label.T[0])
+        valLimits = [(np.percentile(label,5), np.percentile(label,95)) for label in labelList]
+            
+        for v in range(len(varList)):
+            minVal, maxVal = valLimits[v]
+            ax = plt.subplot(n_rows,n_cols,col+1+v*n_cols, projection='3d')
+
+            if 'dir_mat' in varList[v]:
+
+                colmap = np.zeros((labelList[v].shape[0], 3))
+                colmap[labelList[v]==0,:] = np.array([238,130,238])/255
+                colmap[labelList[v]==1,:] = np.array([23,190,207])/255
+                colmap[labelList[v]==2,:] = np.array([255,127,14])/255
+                p = ax.scatter(*emb[:, dim_to_plot[col,:]].T, c = colmap, edgecolors='face', 
+                               alpha=.8, s=40,linewidths=0, vmin= minVal, vmax = maxVal);
+            else:
+                colmap = plt.cm.magma
+                p = ax.scatter(*emb[:, dim_to_plot[col,:]].T, c = labelList[v], edgecolors='face', 
+                               alpha=.8, s=40,linewidths=0, cmap = colmap, vmin= minVal, vmax = maxVal);
+            ax.set_xlabel(axis_label + ' ' + str(dim_to_plot[col,0]), size = 12, labelpad= -8);
+            ax.set_ylabel(axis_label + ' ' + str(dim_to_plot[col,1]), size = 12, labelpad= -8);
+            ax.set_zlabel(axis_label + ' ' + str(dim_to_plot[col,2]), size = 12, labelpad= -8);
+            if v == 0:
+                if isinstance(name_sessions, list):
+                    ax.set_title(name_sessions[v])
+                else:
+                    ax.set_title(fname[:21])
+            for axis in [ax.w_xaxis, ax.w_yaxis, ax.w_zaxis]:
+                axis.line.set_linewidth(2)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
+            ax.grid(False)   
+            if col==n_cols-1:
+                if v>0:
+                    cbar = fig.colorbar(p, ax=ax,fraction=0.046, pad=0.08)
+                    cbar.ax.get_yaxis().labelpad = 8
+                    cbar.ax.set_ylabel(cbarLabel[v], rotation=-270, size=15)
+                
+    plt.subplots_adjust(left=0.05,
+                        bottom=0.05, 
+                        right=0.9, 
+                        top=0.9, 
+                        wspace=0.1, 
+                        hspace=0.05) 
+    return fig
+
+
 def plot_2D_embedding_DS(dict_df, embedding_field, gradient_field= "posx", mouse = None, save = False,save_dir = None):
     fnames = list(dict_df.keys())
     emb_s1 = np.concatenate(dict_df[fnames[0]][embedding_field], axis=0)
@@ -215,7 +310,11 @@ def plot_3D_embedding_LT(dict_df, embedding_field, gtitle, gradient_field= "pos"
     plt.suptitle(gtitle,fontsize=20)
     fig.tight_layout()
     #plt.ion()   
-   
+    
+    
+    
+    
+
 #plot 3D points
 def plot_3D_embedding_LT_v2(dict_df, embedding_field, gtitle, gradient_field= "pos"):
     n_cols = len(dict_df)    
