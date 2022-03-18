@@ -17,7 +17,7 @@ import neural_manifold.decoders as dec
 from neural_manifold import dimensionality_reduction as dim_red
 #%%
 steps = dict()
-steps["manifold_pipeline"] = False
+steps["manifold_pipeline"] = True
 steps["compute_sI"] = False
 steps["compute_decoders"] = False
 steps["compute_decoders_to_shift"] = False
@@ -69,9 +69,9 @@ if steps["manifold_pipeline"]:
         #umap params
         'umap_dims': 'optimize_to_umap_trust',
         'check_dim_to_cells_umap': False,
-        'neighbours_umap_rates':  0.01,
+        'neighbours_umap_rates':  0.05,
         'min_dist_umap_rates': 0.75,
-        'neighbours_umap_traces': 0.01,
+        'neighbours_umap_traces': 0.1,
         'min_dist_umap_traces': 0.75
         }
     # M2019
