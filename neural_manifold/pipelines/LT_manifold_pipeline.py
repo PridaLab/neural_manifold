@@ -60,7 +60,7 @@ def LT_manifold_pipeline(data_dir,mouse, save_dir, **kwargs):
                    '\n\t\tOriginal # neurons: ', num_cells[entry_name], 
                     sep='') for entry_name, _ in df_og.items()]; 
     
-    #2.1 Check neuron minimum activity (both for rates and traces if applicable)
+    #2.1 Compute firing rate
     if kwargs["rates_field"]:
         #2.1 compute firing rate
         print('2.1 Computing firing rates with window size = %.2f' %(1e3*kwargs["rates_kernel_std"]), 'ms', sep='')
@@ -202,7 +202,7 @@ def LT_manifold_pipeline(data_dir,mouse, save_dir, **kwargs):
             print("5.1 Computing Isomap on spikes.")
             df, still_df, fail_df, models_iso_rates, kwargs = _compute_isomap_LT(df, kwargs["rates_field"],
                                                             kwargs["iso_rates_field"], still_df, fail_df,
-                                                            save_plot_dir, mouse, kwargs)
+                                                            kwargs["neighbours_iso_rates"], save_plot_dir, mouse, kwargs)
             if kwargs["time_verbose"]:
                 gu.print_time_verbose(local_starttime, global_starttime)
 
@@ -211,7 +211,7 @@ def LT_manifold_pipeline(data_dir,mouse, save_dir, **kwargs):
             print("5.2 Computing isomap on traces.")
             df, still_df, fail_df, models_iso_traces, kwargs = _compute_isomap_LT(df, kwargs["traces_field"],
                                                             kwargs["iso_traces_field"], still_df, fail_df,
-                                                            save_plot_dir, mouse, kwargs)
+                                                            kwargs["neighbours_iso_traces"], save_plot_dir, mouse, kwargs)
             if kwargs["time_verbose"]:
                 gu.print_time_verbose(local_starttime, global_starttime)
                 
@@ -539,8 +539,6 @@ def _validate_inputs(kwargs):
         #min dist for umap embedding on traces
         if ('min_dist_umap_traces' not in kwargs) and (kwargs["traces_field"]):
             kwargs["min_dist_umap_traces"] = 0.5
-        if 'check_dim_to_cells_umap' not in kwargs:
-            kwargs["check_dim_to_cells_umap"] = False
     ###########################################################################
     #                           PLACE CELLS PARAMETERS                        #
     ###########################################################################      
@@ -729,40 +727,86 @@ def _compute_pca_LT(df_dict, field, pca_field, still_dict, fail_dict, save_plot_
         #to infer axis limits
         max_pc = np.NINF
         max_cumu_pc = np.NINF
-    count = 0
-    for file, pd_struct in df_dict.items():
-        count += 1
-        if kwargs["verbose"]:
-            print('\tWorking on entry %i/' %count, '%i: ' %len(kwargs["fnames"]), file, sep='')   
-        #compute model based on moving activity and reduce 
-        if count==1 or not kwargs["apply_same_model"]:
+    
+    if not kwargs["apply_same_model"]:
+        count = 0
+        for file, pd_struct in df_dict.items():
+            count += 1
+            if kwargs["verbose"]:
+                print(f'\tWorking on entry {count}/{len(kwargs["fnames"])}: {file}', sep='')   
+            #compute model based on moving activity and reduce 
             out_struct, model_pca = dim_red.dim_reduce(pd_struct, PCA(pd_struct[field][0].shape[1]), 
                                                    field,pca_field, return_model = True)
             #find number of dim to explain 80% of variance
             dim_80 = np.where(np.cumsum(model_pca.explained_variance_ratio_)>=0.80)[0][0]
-        else:
-            out_struct = dim_red.apply_dim_reduce_model(pd_struct, model_pca, field, pca_field)
             
-        df_dict.update({file: out_struct})
-        #save model
-        models_pca[file] = model_pca
-        #apply model to still and fail data
-        if still_dict and fail_dict:
-            try:
-                still_dict.update({file: dim_red.apply_dim_reduce_model(still_dict[file], models_pca[file],
-                                                                 field, pca_field)})
-                fail_dict.update({file: dim_red.apply_dim_reduce_model(fail_dict[file], models_pca[file],
-                                                                 field, pca_field)})
-            except:
-                pass
+            df_dict.update({file: out_struct})
+            #save model
+            models_pca[file] = model_pca
+            #apply model to still and fail data
+            if still_dict:
+                try:
+                    still_out_struct = dim_red.apply_dim_reduce_model(still_dict[file], 
+                                                      models_pca[file], field, pca_field)
+                    still_dict.update({file:still_out_struct})
+                except:
+                    pass
+            if fail_dict:
+                try:
+                    fail_out_struct = dim_red.apply_dim_reduce_model(fail_dict[file], 
+                                                      models_pca[file], field, pca_field)
+                    fail_dict.update({file: fail_out_struct})
+                except:
+                    pass
+            
+            if kwargs["verbose"]:
+                print('\t\tExplained variance: 0: %.4f' %models_pca[file].explained_variance_ratio_[0],
+                     '\n\t\tExplained variance 10: %.2f' %(100*np.sum(model_pca.explained_variance_ratio_[:10])),
+                     '\n\t\tDims needed to explain 80%%: %d' %dim_80,sep='')
+            if kwargs["display_plots"]:
+                max_pc = np.max((max_pc,100*models_pca[file].explained_variance_ratio_[0]))
+                max_cumu_pc = np.max((max_cumu_pc, 100*np.sum(models_pca[file].explained_variance_ratio_)))
+            
+    
+    else:
+        #cocnat data of all sessions
+        data_list = [np.concatenate(pd_struct[field].values, axis=0) for _, pd_struct in df_dict.items()]
+        data_array = np.concatenate(data_list, axis=0)
+        if kwargs["verbose"]:
+            print('\tProjecting all data together to find a common model.')  
+        model_pca = PCA(data_array.shape[1])
+        model_pca.fit(data_array)
+        #find number of dim to explain 80% of variance
+        dim_80 = np.where(np.cumsum(model_pca.explained_variance_ratio_)>=0.80)[0][0]
         if kwargs["verbose"]:
             print('\t\tExplained variance: 0: %.4f' %models_pca[file].explained_variance_ratio_[0],
                  '\n\t\tExplained variance 10: %.2f' %(100*np.sum(model_pca.explained_variance_ratio_[:10])),
                  '\n\t\tDims needed to explain 80%%: %d' %dim_80,sep='')
-            
         if kwargs["display_plots"]:
-            max_pc = np.max((max_pc,100*models_pca[file].explained_variance_ratio_[0]))
-            max_cumu_pc = np.max((max_cumu_pc, 100*np.sum(models_pca[file].explained_variance_ratio_)))
+            max_pc =100*model_pca.explained_variance_ratio_[0]
+            max_cumu_pc = 100*np.sum(model_pca.explained_variance_ratio_)
+            
+        count = 0
+        for file, pd_struct in df_dict.items():
+            count +=1
+            models_pca[file] = model_pca
+            out_struct = dim_red.apply_dim_reduce_model(pd_struct, model_pca, field, pca_field)
+            df_dict.update({file: out_struct})
+            #apply model to still and fail data
+            if still_dict:
+                try:
+                    still_out_struct = dim_red.apply_dim_reduce_model(still_dict[file], 
+                                                      models_pca[file], field, pca_field)
+                    still_dict.update({file:still_out_struct})
+                except:
+                    pass
+            if fail_dict:
+                try:
+                    fail_out_struct = dim_red.apply_dim_reduce_model(fail_dict[file], 
+                                                      models_pca[file], field, pca_field)
+                    fail_dict.update({file: fail_out_struct})
+                except:
+                    pass
             
     if kwargs["display_plots"]:
         #plot variance explained
@@ -793,19 +837,46 @@ from scipy.stats import pearsonr
 from kneed import KneeLocator
 from sklearn.metrics import pairwise_distances
 
-def _compute_isomap_LT(df_dict, field, iso_field, still_dict, fail_dict, save_plot_dir,mouse, kwargs):
+def _compute_isomap_LT(df_dict, field, iso_field, still_dict, fail_dict, neighbours, save_plot_dir,mouse, kwargs):
     models_iso = dict()
-    count = 0
-    for file, pd_struct in df_dict.items():
-        count += 1
-        if kwargs["verbose"]:
-            print('\tWorking on entry %i/' %count, '%i: ' %len(kwargs["fnames"]), file, sep='')  
-        #check if new model or apply previous one
-        if count==1 or not kwargs["apply_same_model"]:
+    if not kwargs["apply_same_model"]:
+        count = 0
+        for file, pd_struct in df_dict.items():
+            count += 1
+            if kwargs["verbose"]:
+                print(f'\tWorking on entry {count}/{len(kwargs["fnames"])}: {file}', sep='')   
             #compute model and reduce
-            out_struct, model_iso = dim_red.dim_reduce(pd_struct, Isomap(n_neighbors = kwargs["neighbours_iso_rates"], 
+            if neighbours<1:
+                length = np.concatenate(pd_struct[field].values, axis=0).shape[0]
+                nn = np.round(length*neighbours).astype(int)
+                if kwargs["verbose"]:
+                    print('\t\tInterpreting umap neighbours (%.4f) as fraction of points. Resulting in %d neighbours.'
+                          %(neighbours, nn))
+            else:
+                nn = neighbours
+                
+            out_struct, model_iso = dim_red.dim_reduce(pd_struct, Isomap(n_neighbors = nn, 
                                                                      n_components = kwargs["iso_dims"]), 
                                                                        field, iso_field, return_model = True)
+            df_dict.update({file: out_struct})
+            #save model
+            models_iso[file] = copy.deepcopy(model_iso)       
+            #apply model to still and fail data
+            if still_dict:
+                try:
+                    still_out_struct = dim_red.apply_dim_reduce_model(still_dict[file], 
+                                                      models_iso[file], field, iso_field)
+                    still_dict.update({file:still_out_struct})
+                except:
+                    pass
+            if fail_dict:
+                try:
+                    fail_out_struct = dim_red.apply_dim_reduce_model(fail_dict[file], 
+                                                      models_iso[file], field, iso_field)
+                    fail_dict.update({file: fail_out_struct})
+                except:
+                    pass
+                
             if kwargs["compute_iso_resvar"] or ('adapt_to_isomap' in kwargs["umap_dims"]):
                 #compute data dimensionality
                 if kwargs["verbose"]:
@@ -820,41 +891,70 @@ def _compute_isomap_LT(df_dict, field, iso_field, still_dict, fail_dict, save_pl
                 kl = KneeLocator(np.linspace(0, kwargs["iso_dims"]-1, kwargs["iso_dims"]),
                                 res_var[:,0], curve = "convex", direction = "decreasing")
                 if kl.knee:
-                    models_iso[file+"dimension"] = int(kl.knee+1)
+                    models_iso[file+"_dimension"] = int(kl.knee+1)
                 else:
-                    models_iso[file+"dimension"] = np.nan
+                    models_iso[file+"_dimension"] = np.nan
                 if kwargs["verbose"]:
-                    print( models_iso[file+"dimension"])
+                    print(models_iso[file+"_dimension"])
                     
                 if isinstance(kwargs["umap_dims"], str):
                     if 'adapt_to_isomap' in kwargs["umap_dims"]:
                         if count==1:
                             dim_list = list();
                         dim_list.append(int(kl.knee+1))
+
+    else:
+        data_list = [np.concatenate(pd_struct[field].values, axis=0) for _, pd_struct in df_dict.items()]
+        data_array = np.concatenate(data_list, axis=0)
+        if kwargs["verbose"]:
+            print('\tProjecting all data together to find a common model.')  
+        if neighbours<1:
+            length = data_array.shape[0]
+            nn = np.round(length*neighbours).astype(int)
+            if kwargs["verbose"]:
+                print('\t\tInterpreting umap neighbours (%.4f) as fraction of points. Resulting in %d neighbours.'
+                      %(neighbours, nn))
         else:
+            nn = neighbours
+            
+        model_iso = Isomap(n_neighbors = nn, n_components = kwargs["iso_dims"])
+        model_iso.fit(data_array)
+        
+        count = 0
+        for file, pd_struct in df_dict.items():
+            count += 1
+            models_iso[file] = dict()
+            models_iso[file]["model"] = copy.deepcopy(model_iso)
+            #compute model and project
             out_struct = dim_red.apply_dim_reduce_model(pd_struct, model_iso, field, iso_field)
-        df_dict.update({file: out_struct})
-        #save model
-        models_iso[file] = model_iso       
-        #apply model to still and fail data
-        if still_dict and fail_dict:
-            try:
-                still_dict.update({file: dim_red.apply_dim_reduce_model(still_dict[file], models_iso[file], 
-                                                                 field, iso_field)})
-                fail_dict.update({file: dim_red.apply_dim_reduce_model(fail_dict[file], models_iso[file],
-                                                                 field, iso_field)})
-            except:
-                pass
+            df_dict.update({file: out_struct})
+            #apply model to still and fail data
+            if still_dict:
+                try:
+                    still_out_struct = dim_red.apply_dim_reduce_model(still_dict[file], 
+                                                      models_iso[file], field, iso_field)
+                    still_dict.update({file:still_out_struct})
+                except:
+                    pass
+            if fail_dict:
+                try:
+                    fail_out_struct = dim_red.apply_dim_reduce_model(fail_dict[file], 
+                                                      models_iso[file], field, iso_field)
+                    fail_dict.update({file: fail_out_struct})
+                except:
+                    pass
+            #TODO: check how to implement resvar when using same model
+            
     if isinstance(kwargs["umap_dims"], str):
         if 'adapt_to_isomap' in kwargs["umap_dims"]:
             kwargs["umap_dims"] = np.max(np.array(dim_list))
             if kwargs["verbose"]:
                 print('\tAdapting Umap dimensions to those found by Isomap')
+                
     if kwargs["display_plots"]:
         #plot 3D points
         gu.plot_3D_embedding_LT(df_dict, iso_field, 'Isomap: '+iso_field) 
         plt.savefig(os.path.join(save_plot_dir, mouse+'_'+  iso_field + '_3D'))
-        
         gu.plot_3D_embedding_LT_v2(df_dict, iso_field, 'Isomap: '+iso_field) 
         plt.savefig(os.path.join(save_plot_dir, mouse+'_'+  iso_field+ '_3D_time'))
         plt.close()
@@ -862,6 +962,7 @@ def _compute_isomap_LT(df_dict, field, iso_field, still_dict, fail_dict, save_pl
         if kwargs["plot_trajectory"]:
             gu.plot_trajectory_embedding_LT(df_dict, iso_field, 'Isomap: '+iso_field)
             plt.savefig(os.path.join(save_plot_dir, mouse+'_'+  iso_field + '_trajectory'))
+            
     return df_dict, still_dict, fail_dict, models_iso, kwargs
 
 ###############################################################################
