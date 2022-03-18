@@ -63,15 +63,14 @@ if steps["manifold_pipeline"]:
         'rates_kernel_std': 0.4,
         'th_rates_freq': 0.05,
         #traces field info
-        'traces_field': "deconvProb",
+        'traces_field': "zProb",
         #isomap
         'compute_iso_resvar': True,
         #umap params
         'umap_dims': 'optimize_to_umap_trust',
-        'check_dim_to_cells_umap': False,
-        'neighbours_umap_rates':  0.05,
+        'neighbours_umap_rates':  50,
         'min_dist_umap_rates': 0.75,
-        'neighbours_umap_traces': 0.1,
+        'neighbours_umap_traces': 100,
         'min_dist_umap_traces': 0.75
         }
     # M2019
@@ -636,7 +635,7 @@ else:
 
 #%%
 print("\t--------------------------------------------------------------------------"+
-      "\n\t                       STEP 5: DECODERS CROSS-ANIMALS                     "+
+      "\n\t                       STEP 6: DECODERS CROSS-ANIMALS                     "+
       "\n\t--------------------------------------------------------------------------")
 if steps["compute_decoders_cross_animal"]:
     #M2019
