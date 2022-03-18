@@ -163,7 +163,7 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
         for emb_idx, emb in enumerate([field_signal, *emb_list]):
             for y_idx in range(len(label_list)):
                 for decoder_name in decoder_list:
-                    model_decoder = DECODERS[decoder_name]()
+                    model_decoder = copy.deepcopy(DECODERS[decoder_name]())
                     model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
                     R2s[emb][decoder_name][kfold_index,y_idx,0] = median_absolute_error(Y_test[y_idx][:,0], 
                                                                                 model_decoder.predict(X_test[emb_idx])[:,0])
