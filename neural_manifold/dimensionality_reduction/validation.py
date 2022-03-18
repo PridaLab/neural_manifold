@@ -108,7 +108,6 @@ def trustworthiness_vector(source, embedding, max_k, metric="euclidean", indices
     return result
 
 def continuity_vector(source, embedding, max_k, metric = "euclidean", indices_embedded = None):  # pragma: no cover
-
     tree = KDTree(source, metric=metric)
     indices_source = tree.query(source, k=max_k+1, return_distance=False)
     # Drop the actual point itself
