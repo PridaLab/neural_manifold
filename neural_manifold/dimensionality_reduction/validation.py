@@ -93,16 +93,13 @@ def compute_rank_indices(signal):
 
 
 def trustworthiness_vector(source, embedding, max_k, metric="euclidean", indices_source = None):  # pragma: no cover
-
     tree = KDTree(embedding, metric=metric)
     indices_embedded = tree.query(embedding, k=max_k+1, return_distance=False)
     # Drop the actual point itself
     indices_embedded = indices_embedded[:, 1:]
-
     if isinstance(indices_source, type(None)):
         dist = named_distances[metric]
         indices_source = compute_rank_indices(source, dist)
- 
     result = trustworthiness_vector_bulk(indices_source, indices_embedded, max_k)
     
     return result
@@ -112,10 +109,8 @@ def continuity_vector(source, embedding, max_k, metric = "euclidean", indices_em
     indices_source = tree.query(source, k=max_k+1, return_distance=False)
     # Drop the actual point itself
     indices_source = indices_source[:, 1:]
-
     if isinstance(indices_embedded, type(None)):
         indices_embedded = compute_rank_indices(embedding)
- 
     result = continuity_vector_bulk(indices_source, indices_embedded, max_k)
     
     return result
