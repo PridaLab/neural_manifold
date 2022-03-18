@@ -55,6 +55,11 @@ data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/GC2'
 mouse_GC2 = 'GC2'
 results_dir_GC2, GC2_dict = LT_manifold_pipeline(data_dir, mouse_GC2, save_dir, **params);
 plt.close('all')
+# %% GC3
+data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/GC3' 
+mouse_GC3 = 'GC3'
+results_dir_GC3, GC3_dict = LT_manifold_pipeline(data_dir, mouse_GC3, save_dir, **params);
+plt.close('all')
 # %% CZ3
 data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/CZ3' 
 mouse_CZ3 = 'CZ3'
@@ -72,6 +77,11 @@ sI_GC1_dict = compute_sI(results_dir_GC1, mouse_GC1, ["Inscopix_events_rates","M
                               ["posx","posy","index_mat"],nRep = 1,n_dims = 3, comp_method ='all',load_old_dict = False, nBins = 20)
 # %% GC2 
 sI_GC2_dict = compute_sI(results_dir_GC2, mouse_GC2, ["Inscopix_events_rates","ML_pca", "ML_iso", "ML_umap", 
+                                                           "Inscopix_traces", "Inscopix_traces_pca", "Inscopix_traces_iso",
+                                                           "Inscopix_traces_umap"], 
+                              ["posx","posy","index_mat"],nRep = 1,n_dims = 3, comp_method ='all',load_old_dict = False, nBins = 20)
+# %% GC3 
+sI_GC3_dict = compute_sI(results_dir_GC3, mouse_GC3, ["Inscopix_events_rates","ML_pca", "ML_iso", "ML_umap", 
                                                            "Inscopix_traces", "Inscopix_traces_pca", "Inscopix_traces_iso",
                                                            "Inscopix_traces_umap"], 
                               ["posx","posy","index_mat"],nRep = 1,n_dims = 3, comp_method ='all',load_old_dict = False, nBins = 20)
