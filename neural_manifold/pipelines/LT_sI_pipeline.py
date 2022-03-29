@@ -33,7 +33,7 @@ def compute_sI(data_dir, mouse, fieldList, varList, save_file = True,move_dict =
         kwargs["nRep"] = 100    
     if 'load_old_dict' not in kwargs:
         kwargs["load_old_dict"] = None
-    if 'comp_method' not in kwargs:
+    if 'comp_method' not in kwargs: #pairwise, all, triplets, serial
         kwargs["comp_method"] = 'pairwise'
     if 'nBins' not in kwargs:
         kwargs["nBins"] = 10
@@ -132,43 +132,48 @@ def compute_sI(data_dir, mouse, fieldList, varList, save_file = True,move_dict =
                 n_dims = kwargs["n_dims"]
             
             if 'pairwise' in kwargs["comp_method"]:
-                sI_labels = np.empty((n_dims, n_dims, len(varList)))
+                sI_labels = np.empty((n_dims, n_dims, len(varList)))*np.nan
             elif 'triplets' in kwargs["comp_method"]:
                 first = np.linspace(0,n_dims-1,n_dims).astype(int)
                 second = np.linspace(1,n_dims-1,n_dims-1).astype(int)
                 third = np.linspace(2,n_dims-1,n_dims-2).astype(int)
                 #all non-repeating combinations
                 combined = [(f,s,t) for f in first for s in second if s>f for t in third if t>s]
-                
                 combined_labels =[(f+1,s+1,t+1) for f in first for s in second if s>f for t in third if t>s]
-                sI_labels = np.empty((len(combined), len(varList)))
+                sI_labels = np.empty((len(combined), len(varList)))*np.nan
+                
             elif 'all' in kwargs["comp_method"]:
-                sI_labels = np.empty((len(varList)))
-            
+                sI_labels = np.empty((len(varList)))*np.nan
+            elif 'serial' in kwargs["comp_method"]:
+                sI_labels = np.empty((n_dims,len(varList)))*np.nan
+                
             pval_labels = []
             #For each variable (e.g. posx, posy, velocity)
             for v in range(len(varList)):
                 if kwargs["verbose"]:
                     print('\t\tComputing for variable %s' %varList[v])
-                label = labelList[v]
+                if 'dir_mat' in varList[v]:
+                    nBins = 2
+                else:
+                    nBins = kwargs["nBins"]
+                label = labelList[v][:,0]
                 minVal, maxVal = valLimits[v]
                 if 'pairwise' in kwargs["comp_method"]:
                     sI_mat = np.ones((n_dims, n_dims))*np.nan
                     pval_mat = np.ones((n_dims, n_dims, kwargs["nRep"]))*np.nan
-                    print("\t\t\tComputing dimensions (%d,%d)" %(0,0), sep= '', end ='')
-                    pre_del = '\b\b\b\b\b'
+                    print("\t\t\tComputing dimensions ", sep= '', end ='')
+                    pre_del = ''
                     for ii in range(n_dims):
                         for jj in range(ii+1,n_dims):
                             if kwargs["verbose"]:
                                 print(pre_del,"(%d,%d)" %(ii+1,jj+1), sep = '', end='')
                                 pre_del = (len(str(ii+1))+len(str(jj+1))+3)*'\b'
-    
-                            sI_val, bLab, _ = sI.compute_structure_index(emb, label, kwargs["nBins"], [ii,jj], 0, vmin= minVal, vmax = maxVal)
+                            sI_val, bLab, _ = sI.compute_structure_index(emb, label, nBins, [ii,jj], 0, vmin= minVal, vmax = maxVal)
                             sI_mat[ii,jj], sI_mat[jj,ii] = np.repeat(sI_val,2)
                             sI_shuffle = np.empty((kwargs["nRep"], 1))
                             for n in range(kwargs["nRep"]):
                                 randLabel = label[np.random.permutation(range(len(label)))]
-                                sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, kwargs["nBins"], [ii,jj], 0, vmin= minVal, vmax = maxVal)
+                                sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, nBins, [ii,jj], 0, vmin= minVal, vmax = maxVal)
                             pval_mat[ii,jj,:], pval_mat[jj,ii,:] = sI_shuffle.ravel(), sI_shuffle.ravel()
                     print('')
                     sI_labels[:,:,v] = sI_mat
@@ -177,18 +182,18 @@ def compute_sI(data_dir, mouse, fieldList, varList, save_file = True,move_dict =
                 elif 'triplets' in kwargs["comp_method"]:
                     sI_mat = np.ones((len(combined), 1))*np.nan
                     pval_mat = np.ones((len(combined), 1, kwargs["nRep"]))*np.nan
-                    print("\t\t\tComputing dimensions (%d,%d,%d)" %(0,0,0), sep= '', end ='')
-                    pre_del = '\b\b\b\b\b\b\b'
+                    print("\t\t\tComputing dimensions ", sep= '', end ='')
+                    pre_del = ''
                     for ii, comb in enumerate(combined):
                         if kwargs["verbose"]:
                             print(pre_del, '%s' %(combined_labels[ii], ), sep="", end="")
                             pre_del = (len(str(combined_labels[ii])))*'\b'
                         
-                        sI_mat[ii], bLab, _ = sI.compute_structure_index(emb, label, kwargs["nBins"], np.array(comb), 0, vmin= minVal, vmax = maxVal)
+                        sI_mat[ii], bLab, _ = sI.compute_structure_index(emb, label, nBins, np.array(comb), 0, vmin= minVal, vmax = maxVal)
                         sI_shuffle = np.empty((kwargs["nRep"], 1))
                         for n in range(kwargs["nRep"]):
                             randLabel = label[np.random.permutation(range(len(label)))]
-                            sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, kwargs["nBins"], np.array(comb), 0, vmin= minVal, vmax = maxVal)
+                            sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, nBins, np.array(comb), 0, vmin= minVal, vmax = maxVal)
                         pval_mat[ii,:] = sI_shuffle.ravel()
                         
                     print('')
@@ -197,30 +202,55 @@ def compute_sI(data_dir, mouse, fieldList, varList, save_file = True,move_dict =
                 elif 'all' in kwargs["comp_method"]:
                     pval_mat = np.ones((kwargs["nRep"]))*np.nan
                     emb_space = np.linspace(0,n_dims-1, n_dims).astype(int)                                
-                    sI_val, bLab, _ = sI.compute_structure_index(emb, label, kwargs["nBins"], emb_space,
+                    sI_val, bLab, _ = sI.compute_structure_index(emb, label, nBins, emb_space,
                                                                       0, vmin= minVal, vmax = maxVal)
                     sI_shuffle = np.empty((kwargs["nRep"], 1))
                     for n in range(kwargs["nRep"]):
                         randLabel = label[np.random.permutation(range(len(label)))]
-                        sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, kwargs["nBins"], emb_space,
+                        sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, nBins, emb_space,
                                                                        0, vmin= minVal, vmax = maxVal)
                     sI_labels[v] = sI_val
                     pval_labels.append(sI_shuffle.ravel())
-                        
-            if 'pairwise' in kwargs["comp_method"]:  
-                
+                    
+                elif 'serial' in kwargs["comp_method"]:
+                    sI_mat = np.ones((n_dims, 1))*np.nan
+                    pval_mat = np.ones((n_dims, 1, kwargs["nRep"]))*np.nan
+                    print("\t\t\tComputing serial dimensions " , sep= '', end ='')
+                    pre_del = ''
+                    for top_dim in range(n_dims):
+                        if kwargs["verbose"]:
+                            print(pre_del,f"{top_dim+1}/{n_dims}", sep = '', end='')
+                            pre_del = (len(str(top_dim+1))+len(str(n_dims))+1)*'\b'
+                        emb_space = np.linspace(0,top_dim, top_dim+1).astype(int)                                
+                        sI_mat[top_dim], bLab, _ = sI.compute_structure_index(emb, label, nBins, emb_space,
+                                                                          0, vmin= minVal, vmax = maxVal)
+                        sI_shuffle = np.empty((kwargs["nRep"], 1))
+                        for n in range(kwargs["nRep"]):
+                            randLabel = label[np.random.permutation(range(len(label)))]
+                            sI_shuffle[n],_,_ = sI.compute_structure_index(emb, randLabel, nBins, emb_space,
+                                                                           0, vmin= minVal, vmax = maxVal)
+                        pval_mat[top_dim,:] = sI_shuffle.ravel()
+                    print('')
+                    sI_labels[:,v] = sI_mat[:,0]
+                    pval_labels.append(pval_mat)
+                    
+            if 'pairwise' in kwargs["comp_method"]:
                 sI_dict[file][field].update({'sI_pw':sI_labels, 'pval_pw':pval_labels, 
-                                        'label_pw': np.array(varList, dtype='object'), 
+                                        'label_pw': np.array(varList, dtype='object'),
                                         'file_pw': file, 'field_pw':field})
             elif 'triplets' in kwargs["comp_method"]:
                 sI_dict[file][field].update({'sI_trip':sI_labels, 'pval_trip':pval_labels, 
                                         'comb_trip': combined,
-                                        'label_trip': np.array(varList, dtype='object'), 
+                                        'label_trip': np.array(varList, dtype='object'),
                                         'file_trip': file, 'field_trip':field})
             elif 'all' in kwargs["comp_method"]:
                 sI_dict[file][field].update({'sI_all':sI_labels, 'pval_all':pval_labels, 
-                                        'label_all': np.array(varList, dtype='object'), 
+                                        'label_all': np.array(varList, dtype='object'),
                                         'file_all': file, 'field_all':field})
+            elif 'serial' in kwargs["comp_method"]:
+                sI_dict[file][field].update({'sI_serial':sI_labels, 'pval_serial':pval_labels,
+                                           'label_serial': np.array(varList, dtype='object'),
+                                           'file_serial':file, 'field_serial':pval_labels})
             if save_file:
                 save_file = open(os.path.join(kwargs["save_dir"], mouse+ "_sI_dict.pkl"), "wb")
                 pickle.dump(sI_dict, save_file)
