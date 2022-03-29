@@ -6,12 +6,13 @@ Created on Thu Feb 17 12:11:52 2022
 """
 import copy
 import numpy as np
-from sklearn.metrics import median_absolute_error
 
 #DIM RED LIBRARIES
 import umap
 from sklearn.manifold import Isomap
 from sklearn.decomposition import PCA
+from sklearn.model_selection import RepeatedKFold
+from sklearn.metrics import median_absolute_error
 
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu
@@ -21,131 +22,134 @@ import warnings as warnings
 warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-data warning for XGBoost: 
                                                                #https://stackoverflow.com/questions/67225016/warning-occuring-in-xgboost
 
-def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = ["umap"], input_trial = None,
-                       n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False):  
-    '''Train decoders on base signal and/or embedded one.
+@gu.check_inputs_for_pd
+def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [],
+                    trial_signal = None, decoder_list = ["wf", "wc", "xgb", "svr"],
+                    n_dims = 10, n_splits=10, verbose = False):  
+    
+    """Train decoders on x-base signal (and on projected one if indicated) to 
+    predict a 1D y-signal.
     
     Parameters:
     ----------
-        input_signal (DataFrame or numpy Array): object containing the base signal in which to train the decoders.
-                        If it is a Dataframe, input 'field_signal' is needed. 
+    x_base_signal: Numpy array (TXN; rows are time)
+        Array containing the base signal in which to train the decoders (rows
+        are timestamps, columns are features). It will be also used to compute
+        the embeddings and reduced. 
+    
+    y_signal_list: Numpy array (TXN; rows are time) or list (made of those)
+        Array or list containing the arrays with the behavioral signal that we
+        want the decoders to predict. 
         
     Optional parameters:
     --------------------
-        field_signal (string): if 'input_signal' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
+    emb_list: List of string
+        List containing the name of the embeddings one wants to compute. It
+        currently supports: ['pca','isomap','umap'].
         
-        input_label (numpy Array, str, or list made of those): signals one wants to predict with the decoders. They 
-                        can either be a np.dnarray (or a list of those), or a string (or a list of strings) with 
-                        the name of the columns of 'input_signal'. 
-                        
-        emb_list (string, list of string): name of the embeddings once want to also use to project the base signal
-                        and train the decoders. Currently supported: 'pca', 'isomap', and 'umap'.
+    trial_signal: Numpy array (TX1; rows are time)
+        Array containing the trial each timestamps of the x_base_signal belongs
+        to. It provided, the train/test data set will be computed by dividing
+        in half the number of trials (thus, the actual length of the two sets
+        will not be identical, but no trial will be splitted in half). If not
+        provided the kfold will split in half the data for the train/test set. 
+    
+    
+    decoder_list: List of String (default: ['wf', 'wc', 'xgb', 'svr'])
+        List containing the name of the decoders one wants to train/test. It
+        currently supports the decoders: ['wf', 'wc', 'xgb', 'svr']
+    
+    n_dims: Integer (default: 10)
+        Number of dimensions to project the data into.
         
-        input_trial (numpy Array or string): array contaning the trial to which each time stamp belongs. It can also
-                        be a string with the name of the column of the 'input_signal' dataframe where the array is 
-                        stored.
-                        
-        n_dims (int): number of dimensions in which to project with the different embeddings.
+    n_splits: Integer (default: 10)
+        Number of kfolds to run the training/test. Repeated kfold is used to 
+        randomly divide the signal (or trial_signal) into 50%train 50%test to 
+        achieve the final number of kfolds.
         
-        n_splits (int): number of iterations done (the data is always splitted in half for test and for train).
-        
-        decoder_list (list of str): name of the decoders once wants to train and test. Currently supported:
-                        ['wf', 'wc', 'xgb', 'svr']
-                        
-        verbose (boolean)
-
-                           
+    verbose: Boolean (default: False)
+        Boolean specifing whether or not to print verbose relating the progress
+        of the training (it mainly prints the kfold it is currently in).
+    
     Returns:
     -------
-        R2s (dict): dictionary containing the training and test median absolute errors for all combinations. 
+    R2s: Dictionary
+        Dictionary containing the training and test median absolute errors for 
+        all kfold and all combinations of x_signal/y_signal/decoder.
         
-    '''
-    #check signal input
-    signal = gu.handle_input_dataframe_array(input_signal, field_signal, first_array = True)
-    #check label list input
-    if isinstance(input_label, np.ndarray): #user inputs an independent array for sI
-            label_list = list([copy.deepcopy(input_label)])
-    elif isinstance(input_label, str): #user specifies field_signal
-        label_list = list([gu.dataframe_to_1array_translator(input_signal,input_label)])
-    elif isinstance(input_label, list):
-        if isinstance(input_label[0], str):
-            label_list = gu.dataframe_to_manyarray_translator(input_signal,input_label)
-        elif isinstance(input_label[0], np.ndarray):
-            label_list = copy.deepcopy(input_label)
-        else:
-            raise ValueError("If 'input_label' is a list, it must be composed of either strings " +
-                             "(referring to the columns of the input_signal dataframe), or arrays. " +
-                             "However it was %s" %type(input_label[0]))
-    else:
-        raise ValueError(" 'input_label' must be either an array or a string (referring to the columns "+
-                         "of the input_signal dataframe) (or a list composed of those). However it was %s"
-                         %type(input_label))
-    #Reshape label_list from column vectors to 1D-matrix
-    for idx, y in enumerate(label_list):
+    """
+    #ensure y_signal_list and emb_list are list
+    if isinstance(y_signal_list, np.ndarray): y_signal_list = list([y_signal_list])
+    if isinstance(emb_list, str): emb_list = list([emb_list])
+    #assert inputs
+    assert isinstance(x_base_signal, np.ndarray), \
+        f"'x_base_signal has to be a numpy array but it was a {type(x_base_signal)}"
+    assert isinstance(y_signal_list, list), \
+        f"'y_signal_list has to be a list of numpy.array but it was a {type(y_signal_list)}"
+    assert isinstance(emb_list, list), \
+        f"'emb_list' has to be a list of string but it was a {type(emb_list)}" 
+    #reshape y_signal_list from column vectors to 1D-matrix
+    for idx, y in enumerate(y_signal_list):
         if y.ndim == 1:
-            label_list[idx] = y.reshape(-1,1)
-    #Check if trial mat to use when spliting training/test for decoders
-    if not isinstance(input_trial, type(None)):
-        trial_signal = gu.handle_input_dataframe_array(input_signal, input_trial, first_array = False)
-    else:
-        trial_signal = None 
+            y_signal_list[idx] = y.reshape(-1,1)
+    #check if trial mat to use when spliting training/test for decoders
+    rkf = RepeatedKFold(n_splits=2, n_repeats=np.ceil(n_splits/2).astype(int))
     if isinstance(trial_signal, np.ndarray):
-        if trial_signal.ndim>1:
-            trial_signal = trial_signal[:,0]
         trial_list = np.unique(trial_signal)
         #train with half of trials
-        train_test_division_index = trial_list.shape[0]//2
+        kfold_signal = trial_list
+        total_index = np.linspace(0, x_base_signal.shape[0]-1, x_base_signal.shape[0]).astype(int)
     else:
-        from sklearn.model_selection import RepeatedKFold
-        rkf = RepeatedKFold(n_splits=2, n_repeats=n_splits)
-        train_indexes = [];
-        test_indexes = [];
-        for train_index, test_index in rkf.split(signal):
-            train_indexes.append(train_index)
-            test_indexes.append(test_index)
+        kfold_signal = x_base_signal
+        
+    train_indexes = [];
+    test_indexes = [];
+    for train_index, test_index in rkf.split(kfold_signal, kfold_signal):
+        train_indexes.append(train_index)
+        test_indexes.append(test_index)
+        
     if verbose:
-        print('\t\tKfold: X/X',end='', sep='')
+        print("\t\tKfold: X/X",end='', sep='')
         pre_del = '\b\b\b'
-    #initialize dictionary of this session (then it will be appended into the global dictionary)
-    if not field_signal:
-        field_signal = 'base_signal'
+    #initialize dictionary to save results
     R2s = dict()
-    for emb in [field_signal, *emb_list]:
+    for emb in ['base_signal', *emb_list]:
         R2s[emb] = dict()
         for decoder_name in decoder_list:
-            R2s[emb][decoder_name] = np.zeros((n_splits,len(label_list),2))
-    
-    for kfold_index in range(n_splits):
+            R2s[emb][decoder_name] = np.zeros((n_splits,len(y_signal_list),2))
+            
+    n_x_signals = len(['base_signal', *emb_list])
+    predictions = [np.zeros((n_splits,y.shape[0],n_x_signals+2)) for y in y_signal_list]
+    for y_idx, y in enumerate(y_signal_list):
+        predictions[y_idx][:,:,1] = np.tile(y, (1, n_splits)).T
+        
+    for kfold_idx in range(n_splits):
         if verbose:
-            print(pre_del,"%d/%d" %(kfold_index+1,n_splits), sep = '', end='')
-            pre_del = (len(str(kfold_index+1))+len(str(n_splits))+1)*'\b'
+            print(f"{pre_del}{kfold_idx+1}/{n_splits}", sep = '', end='')
+            pre_del = (len(str(kfold_idx+1))+len(str(n_splits))+1)*'\b'
+            
+        #split into train and test data
         if isinstance(trial_signal, np.ndarray):
-            #split into train and test data
-            fold_split = np.copy(trial_list)
-            np.random.shuffle(fold_split)
-            train_index = np.any(trial_signal.reshape(-1,1)==fold_split[:train_test_division_index], axis=1)
-            test_index = np.any(trial_signal.reshape(-1,1)==fold_split[train_test_division_index:], axis=1)
-            
-            X_train = []
-            X_base_train = signal[train_index,:]
-            X_train.append(X_base_train)
-            X_test = []
-            X_base_test = signal[test_index,:]
-            X_test.append(X_base_test)
-            
-            Y_train = [y[train_index,:] for y in label_list]
-            Y_test = [y[test_index,:] for y in label_list]
+            train_index = np.any(trial_signal.reshape(-1,1)==trial_list[train_indexes[kfold_idx]], axis=1)
+            train_index = total_index[train_index]
+            test_index = np.any(trial_signal.reshape(-1,1)==trial_list[test_indexes[kfold_idx]], axis=1)
+            test_index = total_index[test_index]
         else:
-            X_train = []
-            X_base_train = signal[train_indexes[kfold_index]]
-            X_train.append(X_base_train)
-            X_test = []
-            X_base_test = signal[test_indexes[kfold_index]]
-            X_test.append(X_base_test)
-    
-            Y_train = [y[train_indexes[kfold_index]] for y in label_list]
-            Y_test = [y[test_indexes[kfold_index]] for y in label_list]
+            train_index = train_indexes[kfold_idx]
+            test_index = test_indexes[kfold_idx]
+            
+        for y_idx, y in enumerate(y_signal_list):
+            predictions[y_idx][kfold_idx,train_index,0] = 0
+            predictions[y_idx][kfold_idx,test_index,0] = 1
+
+        X_train = []
+        X_base_train = x_base_signal[train_index,:]
+        X_train.append(X_base_train)
+        X_test = []
+        X_base_test = x_base_signal[test_index,:]
+        X_test.append(X_base_test)
+        Y_train = [y[train_index,:] for y in y_signal_list]
+        Y_test = [y[test_index,:] for y in y_signal_list]
         #compute embeddings
         for emb in emb_list:
             if 'umap' in emb:
@@ -160,18 +164,29 @@ def decoders_1D(input_signal,field_signal = None, input_label=None, emb_list = [
             X_train.append(X_signal_train)
             X_test.append(X_signal_test)
         #train and test decoders 
-        for emb_idx, emb in enumerate([field_signal, *emb_list]):
-            for y_idx in range(len(label_list)):
+        for emb_idx, emb in enumerate(['base_signal', *emb_list]):
+            for y_idx in range(len(y_signal_list)):
                 for decoder_name in decoder_list:
-                    model_decoder = copy.deepcopy(DECODERS[decoder_name]())
+                    #train decoder
+                    model_decoder = DECODERS[decoder_name]()
                     model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
-                    R2s[emb][decoder_name][kfold_index,y_idx,0] = median_absolute_error(Y_test[y_idx][:,0], 
-                                                                                model_decoder.predict(X_test[emb_idx])[:,0])
-                    R2s[emb][decoder_name][kfold_index,y_idx,1] = median_absolute_error(Y_train[y_idx][:,0], 
-                                                                                model_decoder.predict(X_train[emb_idx])[:,0])
+                    #make predictions
+                    train_pred = model_decoder.predict(X_train[emb_idx])[:,0]
+                    test_pred = model_decoder.predict(X_test[emb_idx])[:,0]
+                    #check errors
+                    test_error = median_absolute_error(Y_test[y_idx][:,0], test_pred)
+                    train_error = median_absolute_error(Y_train[y_idx][:,0], train_pred)
+                    #store results
+                    R2s[emb][decoder_name][kfold_idx,y_idx,0] = test_error
+                    R2s[emb][decoder_name][kfold_idx,y_idx,1] = train_error
+
+                    total_pred = np.hstack((train_pred, test_pred)).T
+                    total_pred = total_pred[np.argsort(np.hstack((train_index, test_index)).T)]
+                    predictions[y_idx][kfold_idx,:,emb_idx+2] = total_pred
+                    
     if verbose:
         print("")            
-    return R2s 
+    return R2s , predictions
 
 def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = None, field_signal_A = None, field_signal_B = None, 
                               input_label = None, input_label_A = None, input_label_B = None, 
