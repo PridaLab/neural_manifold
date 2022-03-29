@@ -18,17 +18,18 @@ from neural_manifold import dimensionality_reduction as dim_red
 #%%
 steps = dict()
 steps["manifold_pipeline"] = True
-steps["compute_sI"] = False
-steps["compute_decoders"] = False
-steps["compute_decoders_to_shift"] = False
-steps["compute_decoders_cross_session"] = False
-steps["compute_decoders_cross_animal"] = False
+steps["compute_sI"] = True
+steps["compute_decoders"] = True
+steps["compute_decoders_to_shift"] = True
+steps["compute_decoders_cross_session"] = True
+steps["compute_decoders_cross_animal"] = True
 verbose = True
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results_pipeline/move_data'
+
 if not steps["manifold_pipeline"]:
     mouse_M2019 = 'M2019'
     results_dir_M2019 = os.path.join(save_dir, "M2019_170122_100510")
-    
+
     mouse_M2021 = 'M2021'
     results_dir_M2021 = os.path.join(save_dir, "M2021_170122_131036")
    
@@ -63,14 +64,14 @@ if steps["manifold_pipeline"]:
         'rates_kernel_std': 0.4,
         'th_rates_freq': 0.05,
         #traces field info
-        'traces_field': "zProb",
+        'traces_field': "rawProb",
         #isomap
         'compute_iso_resvar': True,
         #umap params
         'umap_dims': 'optimize_to_umap_trust',
         'neighbours_umap_rates':  50,
         'min_dist_umap_rates': 0.75,
-        'neighbours_umap_traces': 100,
+        'neighbours_umap_traces': 200,
         'min_dist_umap_traces': 0.75
         }
     # M2019
@@ -129,104 +130,139 @@ print("\t-----------------------------------------------------------------------
       "\n\t                           STEP 2: STRUCTURE INDEX                        "+
       "\n\t--------------------------------------------------------------------------")
 if steps["compute_sI"]:
+    params["sI_field_pw"] = ["ML_pca", "ML_iso", "ML_umap", "rawProb_pca", "rawProb_iso", "rawProb_umap"]
+    params["sI_field_all"] = ["ML_rates","ML_pca", "ML_iso", "ML_umap", "rawProb", "rawProb_pca", "rawProb_iso", "rawProb_umap"]
+    params["sI_field_triplets"] = ["ML_iso", "ML_umap", "rawProb_iso", "rawProb_umap"]
+    params["sI_field_serial"] = ["ML_rates","ML_pca", "ML_iso", "ML_umap", "rawProb", "rawProb_pca", "rawProb_iso", "rawProb_umap"]
+
     #M2019
         #1. Pairwise Comparison
-    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+    
+        #4. Serial comparison
+    sI_M2019_dict = compute_sI(results_dir_M2019, mouse_M2019, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
+    
     #M2021
         #1. Pairwise Comparison
-    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2021_dict = compute_sI(results_dir_M2021, mouse_M2021, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
     #M2022
         #1. Pairwise Comparison
-    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2022_dict = compute_sI(results_dir_M2022, mouse_M2022, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
     #M2023
         #1. Pairwise Comparison
-    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2023_dict = compute_sI(results_dir_M2023, mouse_M2023, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
     #M2024
         #1. Pairwise Comparison
-    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2024_dict = compute_sI(results_dir_M2024, mouse_M2024, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
     #M2025
         #1. Pairwise Comparison
-    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2025_dict = compute_sI(results_dir_M2025, mouse_M2025, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
     #M2026
         #1. Pairwise Comparison
-    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, ["ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap',
+    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, params["sI_field_pw"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap',
                                   comp_method ='pairwise', nBins = 20)
         #2. All Comparison
-    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, ["ML_rates","ML_pca", "ML_iso", "ML_umap"], 
-                                  ["posx","posy","index_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
+    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, params["sI_field_all"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1,n_dims = 'adapt_to_umap', comp_method ='all',
                                   load_old_dict = True, nBins = 20)
     
         #3. Triplet Comparison (find best dimensions to plot)
-    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, ["ML_umap"], ["posx","posy", "index_mat"], 
+    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, ["ML_umap"], params["sI_field_triplets"], 
                                   nRep = 1, n_dims = 'adapt', comp_method ='triplets',
                                   load_old_dict = True)
+        #4. Serial comparison
+    sI_M2026_dict = compute_sI(results_dir_M2026, mouse_M2026, params["sI_field_serial"], 
+                                  ["posx","posy","index_mat", "dir_mat"],nRep = 1, n_dims = 'adapt', 
+                                  comp_method ='serial', load_old_dict = True)
 else:
     #Load data
     if "sI_M2019_dict" not in locals():
