@@ -64,7 +64,7 @@ def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**
         signal = copy.deepcopy(input_object)
     else:
         raise ValueError("Input object has to be a dataframe or a numpy array.")
-    
+        
     #Check shape ratio
     if signal.shape[0]<signal.shape[1]:
         warnings.warn("Shape[0] of signal is smaller than Shape[1]. Note that " +
@@ -186,7 +186,7 @@ def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10
     num_trust = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
         if verbose:
-            print('Checking dimension %i ' %(dim), sep='', end = '')
+            print('Checking dimension %i' %(dim), sep='', end = '')
         emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(signal)
         num_trust[dim-1,0] = dim_validation.trustworthiness_vector(signal, emb ,n_neigh, indices_source = signal_indices)[-1]
         if return_emb:
