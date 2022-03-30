@@ -9,7 +9,7 @@ import numpy as np
 import copy
 from neural_manifold.general_utils import translators as trns
 
-
+#TODO: to be delted as there is the new decorator
 def handle_input_dataframe_array(input_object, input_signal_1 = None, input_signal_2 = None, first_array = True): 
     '''General function to handle inputs that can either be a dataframe+column_string or a numpy array.
     Priority is as follow:
