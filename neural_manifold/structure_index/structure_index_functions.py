@@ -72,16 +72,19 @@ def compute_pointCloudsOverlap(cloud1, cloud2, k):
     #Compute the degree of each point of cloud 1
     degree = np.sum(connectivity, axis=1)[cloud_label==1]
     #Compute overlap percentage
-    overlap = (np.sum(degree > k) / degree.shape[0])*100
+    #overlap_th = k+1 #one is too many overlap
+    overlap_th = k - np.round(k/3) + np.round(k/3)*2 #1/3 of nn
+    overlap = (np.sum(degree >= overlap_th) / degree.shape[0])*100
     return overlap
 
 
 
 def compute_structure_index(emb, label, nBins, dimNames, plotCluster, overlapThreshold=0.5, **kwargs):
     #Preprocess data 
-    emb = emb[:,dimNames]
-    for d in range(emb.shape[1]):
-        emb[:,d] = (emb[:,d] - np.nanmean(emb[:,d])) / np.nanstd(emb[:,d])
+    #emb = emb[:,dimNames]
+    #for d in range(emb.shape[1]):
+    #    emb[:,d] = (emb[:,d] - np.nanmean(emb[:,d])) / np.nanstd(emb[:,d])
+    
     #Delete nan values from label and emb
     emb = np.delete(emb, np.where(np.isnan(label))[0], axis=0)
     label = np.delete(label, np.where(np.isnan(label))[0], axis=0)
@@ -103,7 +106,12 @@ def compute_structure_index(emb, label, nBins, dimNames, plotCluster, overlapThr
         binSize = (np.max(label) - np.min(label)) / nBins
         binEdges = np.column_stack((np.linspace(np.min(label),np.min(label)+binSize*(nBins-1),nBins),
                                     np.linspace(np.min(label),np.min(label)+binSize*(nBins-1),nBins)+binSize))
-
+    #set number of nn
+    if 'nn' not in kwargs:
+        nn = 3
+    else:
+        nn = kwargs['nn']
+        
     #Create binLabel
     binLabel = np.zeros(label.shape)
     for b in range(nBins-1):
@@ -130,7 +138,7 @@ def compute_structure_index(emb, label, nBins, dimNames, plotCluster, overlapThr
     for ii in range(overlapMat.shape[0]):
         for jj in range(overlapMat.shape[1]):
             if ii != jj:
-                overlap = compute_pointCloudsOverlap(emb[binLabel==ii+1,:], emb[binLabel==jj+1,:], 3)
+                overlap = compute_pointCloudsOverlap(emb[binLabel==ii+1,:], emb[binLabel==jj+1,:], nn)
                 overlapMat[ii,jj] = overlap/100
     #Symetrize overlap matrix
     overlapMat = (overlapMat + overlapMat.T) / 2
