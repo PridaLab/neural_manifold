@@ -33,7 +33,7 @@ def check_inputs_for_pd(func):
         Arguments to be passed down to the decored function w/o any modification
     **kwargs: keyword arguments
         Key arguments for the decorated function. If the kwarg 'pd_object' is 
-        passed down, then any kwargs whose name has the sequence '*signal' that
+        passed down, then any kwargs whose name has the sequence '*_signal' that
         is a string or a list of string will be interpreted as columns of the 
         'pd_object' where the actual signal resides and thus will be transformed
         into numpy array (or a list of the former) by calling the translator 
@@ -54,7 +54,7 @@ def check_inputs_for_pd(func):
             new_kwargs = copy.deepcopy(kwargs)
             del new_kwargs['pd_object'] #delete pd_object from kwargs of final function
             #get list of kwargs with the key word 'signal'
-            signal_keys = [key for key in list(kwargs.keys()) if 'signal' in key] 
+            signal_keys = [key for key in list(kwargs.keys()) if '_signal' in key] 
             for signal in signal_keys:
                 if isinstance(kwargs[signal], str):
                     #extract signal from pd_struct into array
