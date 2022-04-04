@@ -141,7 +141,7 @@ def smooth_data(mat, bin_size=None, std=None, hw=None, win=None, assymetry = Fal
     -------
     np.array of the same size as mat
     """
-    assert mat.ndim == 1 or mat.ndim == 2, "mat has to be a 1D or 2D array"
+    #assert mat.ndim == 1 or mat.ndim == 2, "mat has to be a 1D or 2D array"
     assert  sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw or std"
     
     if win is None:
