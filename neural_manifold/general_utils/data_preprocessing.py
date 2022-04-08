@@ -119,7 +119,7 @@ def hw_to_std(hw):
     return hw / (2 * np.sqrt(2 * np.log(2)))
 
 #Copied from PyalData package (19/10/21)
-def smooth_data(mat, bin_size=None, std=None, hw=None, win=None, assymetry = False):
+def smooth_data(mat, bin_size=None, std=None, hw=None, win=None, assymetry = False, axis=0):
     """
     Smooth a 1D array or every column of a 2D array
 
@@ -149,7 +149,7 @@ def smooth_data(mat, bin_size=None, std=None, hw=None, win=None, assymetry = Fal
         if std is None:
             std = hw_to_std(hw)
         win = norm_gauss_window(bin_size, std, assymetry = assymetry)
-    return convolve1d(mat, win, axis=0, output=np.float32, mode='reflect')
+    return convolve1d(mat, win, axis=axis, output=np.float32, mode='reflect')
 
 #Copied from PyalData package (19/10/21)
 def select_trials(trial_data, query, reset_index=True):

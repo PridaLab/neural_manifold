@@ -1,6 +1,6 @@
 close all; clear all; clc;
 %%
-data_file =  'GC1_Rot_events_s7.mat';
+data_file =  'CZ3_LTm_events_s5.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -530,9 +530,9 @@ for ii = 1:size(cState_exp,1)-1
     %trial_data(ii).reward = cState_exp(ii,3);
     trial_data(ii).pos = tracesEvents.position(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).vel = tracesEvents.velocity(cState_exp(ii,1):cState_exp(ii,2),:);
-
+    %{
     trial_data(ii).Inscopix_traces = tracesEvents.traces(cState_exp(ii,1):cState_exp(ii,2),:);
-
+    
     trial_data(ii).Inscopix_SNR3_spikes = tracesEvents.spikes_SNR3(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).Inscopix_SNR3_amp_spikes = tracesEvents.spikes_SNR3_amp(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).Inscopix_SNR2_spikes = tracesEvents.spikes_SNR2(cState_exp(ii,1):cState_exp(ii,2),:);
@@ -544,6 +544,13 @@ for ii = 1:size(cState_exp,1)-1
 
     trial_data(ii).Inscopix_events_spikes = double(tracesEvents.events(cState_exp(ii,1):cState_exp(ii,2),:)>0);
     trial_data(ii).Inscopix_amp_events_spikes = double(tracesEvents.events(cState_exp(ii,1):cState_exp(ii,2),:));
+    %}
+    trial_data(ii).rawProb = tracesEvents.rawProb(cState_exp(ii,1):cState_exp(ii,2),:);
+    trial_data(ii).rawTraces = tracesEvents.rawTraces(cState_exp(ii,1):cState_exp(ii,2),:);
+    trial_data(ii).deconvProb = tracesEvents.spikeDeconvTrace(cState_exp(ii,1):cState_exp(ii,2),:);
+
+    trial_data(ii).ML_spikes = tracesEvents.spikeML(cState_exp(ii,1):cState_exp(ii,2),:);
+
     %trial_data(ii).cellAnaLoc = ones(size(tracesEvents.tracesMINI,2),2);
 end
 count = 1;
