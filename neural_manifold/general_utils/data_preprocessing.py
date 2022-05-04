@@ -36,9 +36,8 @@ def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous
         trial_data with '_rates' fields added
     """
     out_frame = copy.deepcopy(data_frame)
-    spike_fields = [name for name in out_frame.columns.values if name.lower().endswith("_spikes")]
-    rate_suffix = "_rates"
-    rate_fields = [name[:-len("_spikes")]+ rate_suffix for name in spike_fields]
+    spike_fields = [name for name in out_frame.columns.values if name.lower().__contains__("spikes")]
+    rate_fields = [name.replace("spikes", "rates") for name in spike_fields]
     columns_name = [col for col in out_frame.columns.values]
     lower_columns_name = [col.lower() for col in out_frame.columns.values]
     if 'bin_size' in lower_columns_name:
