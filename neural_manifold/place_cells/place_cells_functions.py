@@ -71,10 +71,10 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
     #num_shuffles
     #min_shift (s)
     
-    assert  sum([arg in kwargs for arg in ['bin_width', 'bin_num']]) < 2, \
+    assert sum([arg in kwargs for arg in ['bin_width', 'bin_num']]) < 2,\
                                                 "only give bin_width or bin_num"
-    assert  sum([not isinstance(arg, type(None)) for arg in [rates_signal, 
-            traces_signal]]) < 2, "only give rates or traces"
+    assert sum([not isinstance(arg, type(None)) for arg in [rates_signal, 
+                                traces_signal]]) < 2, "only give rates or traces"
 
     assert 'sF' in kwargs, "you must provide sampling frequency ('sF')"
     
@@ -165,7 +165,7 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
         direction = direction[pos_boolean]
         if not isinstance(spikes, type(None)):
             spikes = spikes[pos_boolean]
-
+            th_spikes = np.sum(spikes, axis=0)>20
     #Create grid along each dimensions
     min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
     obs_length = max_pos - min_pos #(pos.shape[1],)
@@ -221,9 +221,12 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
         
         shuffled_metric_val[idx] = _compute_metric(shifted_pos_pdf, shifted_neu_pdf, kwargs["method"])
         
-    th_metric_val = np.percentile(shuffled_metric_val, 95, axis=0)
+    th_metric_val = np.percentile(shuffled_metric_val, 99, axis=0)
+    
     place_cells = np.linspace(0, metric_val.shape[0]-1, metric_val.shape[0])
-    place_cells = place_cells[np.any(metric_val>th_metric_val,axis=1)].astype(int)
+    place_cells = place_cells[np.any(metric_val>th_metric_val,axis=1)*th_spikes].astype(int)
+    
+    place_fields, place_fields_id = _check_placefields(pos_pdf, neu_pdf, place_cells)
     if dim==1:
         _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, 
                                      spikes, kwargs["method"], save_dir)
@@ -265,7 +268,7 @@ def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
             row_idx = cell_idx//cells_per_row
             col_idx = cell_idx%cells_per_col
             
-            if cell_idx in place_cells:
+            if gcell_idx in place_cells:
                 color_cell = [.2,.6,.2]
             else:
                 color_cell = 'k'
@@ -309,11 +312,8 @@ def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
     with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.htm"),'w') as f:
         f.write(html)
 
-
-
-        
+   
 def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes, method, save_dir):
-    
     min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
     cells_per_row = 4
     cells_per_col = 4
@@ -340,7 +340,7 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
             row_idx = cell_idx//cells_per_row
             col_idx = cell_idx%cells_per_col
             
-            if cell_st in place_cells:
+            if gcell_idx in place_cells:
                 color_cell = [.2,.6,.2]
             else:
                 color_cell = 'k'
@@ -381,16 +381,14 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
     with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.htm"),'w') as f:
         f.write(html)
 
-    
-
 def _compute_metric(pos_pdf, neu_pdf, method):
     if 'spatial_info' in method:
         return _compute_spatial_info(pos_pdf, neu_pdf)
     elif 'response_profile' in method:
         return _compute_response_profile(pos_pdf, neu_pdf)
 
-def _compute_continuity(pos_pdf, neu_pdf):
-    """Compute stability adapted from
+def _check_placefields(pos_pdf, neu_pdf, place_cells = None):
+    """Compute place fields of already detected place cells. Adapted from:
     https://doi.org/10.1038/nn.2648
     
     1-Potential place fields: contiguous regions in which all points were 
@@ -398,11 +396,10 @@ def _compute_continuity(pos_pdf, neu_pdf):
         baseline value (20 percentile)
         
     2-Potential place field have to satisfy:
-        a) >18cm wide
-        b) At least one bin with > 0.1 fluo
+        a) >18cm wide (Does not apply)
+        b) At least one bin with > 0.1 fluo (changed to 0.01Hz)
         c) Mean in-field fluo > 3* mean out-field fluo
-        d) Significant calcium traces must be present 30% of the time
-
+        d) Significant calcium traces must be present 30% of the time (Does not apply)
 
     Parameters
     ----------
@@ -434,6 +431,9 @@ def _compute_continuity(pos_pdf, neu_pdf):
     Returns
     -------
     place_fields: numpy array (space_dims, nn, nd)
+        Numpy array containing 0 on the bins with no place field, and x for 
+        the bins that correspond to a place field (where x is the id of the 
+        field it belongs to) for each neuron (nn) and each direction.
         
     place_fields_id: numpy array (nn,nd)
         Numpy array containing the number of place fields for each neuron 
@@ -443,48 +443,111 @@ def _compute_continuity(pos_pdf, neu_pdf):
             For case 1, spatial_info has a shape of (100,1)
             For case 2, spatial info has a shape of (100,2)
             For case 3, spatial info has a shape of (150,3)
-            
     """
-    
+    if isinstance(place_cells, type(None)):
+        place_cells = np.linspace(0,neu_pdf.shape[-2]-1,neu_pdf.shape[-2]).astype(int)
+        
     space_dims = tuple(range(neu_pdf.ndim - 2)) #idx of axis related to space
     subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
-
-    max_response = np.nanmax(neu_pdf, axis=space_dims)
-    baseline_th = np.percentile(neu_pdf, 25, axis=space_dims)
+    pneu_pdf = eval("neu_pdf[" + ":,"*(neu_pdf.ndim - 2)+ "place_cells,:]")
+    max_response = np.nanmax(pneu_pdf, axis=space_dims)
+    baseline_th = np.percentile(pneu_pdf, 25, axis=space_dims)
     baseline_th = np.tile(baseline_th, tuple(subAxis_length+[1,1]))
-    baseline_response = copy.deepcopy(neu_pdf)
-    baseline_response[neu_pdf>baseline_th] = np.nan
+    baseline_response = copy.deepcopy(pneu_pdf)
+    baseline_response[pneu_pdf>baseline_th] = np.nan
     baseline_response = np.nanmean(baseline_response, axis= space_dims)
     
     putative_th = 0.25*(max_response-baseline_response)    
     putative_th = np.tile(putative_th, tuple(subAxis_length+[1,1]))
-    putative_fields = neu_pdf>putative_th
+    putative_fields = pneu_pdf>putative_th
     
     place_fields = np.zeros(putative_fields.shape)
-    place_fields_id = np.zeros(neu_pdf.shape[-2:])
-    for cell in range(neu_pdf.shape[-2]):
-        for dire in range(neu_pdf.shape[-1]):
-            labeled, nr_objects = ndimage.label(putative_fields[:,:,cell,dire]) 
+    place_fields_id = np.zeros(pneu_pdf.shape[-2:])
+    for cell in range(len(place_cells)):
+        for dire in range(pneu_pdf.shape[-1]):
+            temp_neu = eval("putative_fields[" + ":,"*(pneu_pdf.ndim - 2)+ "cell, dire]")
+            labeled, nr_objects = ndimage.label(temp_neu) 
+            flag_1 = False
+            flag_2 = False
+            flag_3 = False
+            flag_4 = False
             for field_idx in range(nr_objects):
                 field_im = labeled == field_idx+1
                 #condition 1: minimum size
-                flag_1 = False
                 #condition 2: at least one bin with >0.01
-                flag_2 = np.sum(neu_pdf[field_im, cell, dire]>0.01)==0
+                flag_2 = np.sum(pneu_pdf[field_im, cell, dire]>0.02)==0
                 #condition 3: Mean in-field fluo > 3* mean out-field fluo
-                m_infield = np.nanmean(neu_pdf[field_im, cell, dire])
-                m_outfield = np.nanmean(neu_pdf[field_im==False, cell, dire])
+                m_infield = np.nanmean(pneu_pdf[field_im, cell, dire])
+                m_outfield = np.nanmean(pneu_pdf[labeled==0, cell, dire])
                 flag_3 = m_infield<3*m_outfield
-                #condition 4: 
-                flag_4 = False
-                
-                if (flag_1*flag_2*flag_3*flag_4):
+                #condition 4:                 
+                if (flag_1+flag_2+flag_3+flag_4):
                     putative_fields[field_im,cell,dire] = False       
                     labeled[field_im] = 0
-                else:
-                    place_fields[field_im,cell,dire] = field_idx+1
-                    place_fields_id[cell, dire] +=1
+            #see if need merging (fields apart by less than 3 steps)
+            #programmed from: https://cs.stackexchange.com/questions/117989/hausdorff-distance-between-two-binary-images-according-to-distance-maps
+            if len(np.unique(labeled))-1>1:
+                n_fields = len(np.unique(labeled))-1
+                field_og = 1
+                while field_og < n_fields:
+                    field_im = labeled == field_og
+                    dist_field = get_distance_to_object(field_im)
+                        
+                    merged = 0
+                    for field_to in range(field_og+1, n_fields+1):
+                        dist_og_to = dist_field*(labeled==field_to)
+                        dist_og_to[dist_og_to==0] = np.nan
+                        min_dist = np.nanmin(dist_og_to)
+                        if min_dist<3:
+                            field_to_im = labeled == field_to
+                            dist_to_field = get_distance_to_object(field_to_im)
+                            dist_to_field[dist_to_field==0]
+                            
+                            in_between_bins = (dist_field<3)*(dist_to_field<3)
+                            
+                            labeled[labeled==field_to] = field_og
+                            labeled[in_between_bins == True] = field_og
+                            merged +=1
+                            n_fields = len(np.unique(labeled))-1
+                    if merged>0:
+                        labeled[labeled>field_og] -=merged
+                    else:
+                        field_og +=1
+                    
+            place_fields[labeled>-1,cell,dire] = labeled
+            place_fields_id[cell, dire] = len(np.unique(labeled))-1
+            
     return place_fields, place_fields_id
+
+
+def get_distance_to_object(mat):
+    #Adapted from https://www.geeksforgeeks.org/distance-nearest-cell-1-binary-matrix/
+    #TODO: generalize to N dimensions
+    og_dim = False
+    if mat.ndim==1:
+        og_dim = True
+        mat = mat.reshape(-1,1)
+        
+    # Initialize the answer matrix 
+    D = np.zeros(mat.shape)+np.inf
+    # For each cell
+    for from_row in range(D.shape[0]):
+        for from_col in range(D.shape[1]):
+            if mat[from_row, from_col]==1:
+                D[from_row, from_col] = 0
+            else:
+                # Traversing the whole matrix to find the minimum distance.
+                for to_row in range(D.shape[0]):
+                    for to_col in range(D.shape[1]):
+                        # If cell contain 1, check for minimum distance.
+                        if mat[to_row, to_col] == 1:
+                            D[from_row, from_col] = min(D[from_row, from_col],
+                                        abs(from_row - to_row) + abs(from_col - to_col))
+    if og_dim:
+        D = D[:,0]
+                       
+    return D
+
 
 def _compute_response_profile(pos_pdf, neu_pdf):
     """Compute response profile adapted from
@@ -529,7 +592,6 @@ def _compute_response_profile(pos_pdf, neu_pdf):
             For case 3, response_profile  info has a shape of (150,3)
             
     """
-    
     space_dims = tuple(range(neu_pdf.ndim - 2)) #idx of axis related to space
     #n_neu = neu_pdf.shape[-2]
     #subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
@@ -627,8 +689,7 @@ def _get_edges(pos, limit, dim):
     -------
     signal: numpy array
         Concatenated dataframe column into numpy array along axis=0.
-    """
-    
+    """  
     assert pos.shape[1]>=dim, f"pos has less dimensions ({pos.shape[1]}) " + \
                                 f"than the indicated in dim ({dim})"
     norm_limit = limit/100
@@ -694,7 +755,6 @@ def _get_pdf(pos, neu_signal, mapAxis, dim, dir_mat = None):
         Numpy array containing the mean neural activity of each neuron at each 
         bin for each of the directions if dir_mat was indicated.
     """
-    
     if isinstance(dir_mat, type(None)):
         dir_mat = np.zeros((pos.shape[0],1))
         
