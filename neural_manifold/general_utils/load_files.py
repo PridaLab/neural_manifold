@@ -54,7 +54,7 @@ def load_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
     if verbose:
         print('')
     if len(data_dict)==1:
-        data_dict = data_dict[file]
+        data_dict = data_dict[name_dict]
     return data_dict
 
 
@@ -125,9 +125,9 @@ def backshift_idx_fields(trial_data):
 
     Returns
     -------
-    trial_data with the 'idx_' fields adjusted
+    trial_data with the 'idx' fields adjusted
     """
-    idx_fields = [col for col in trial_data.columns.values if col.startswith("idx")]
+    idx_fields = [col for col in trial_data.columns.values if "idx" in col]
 
     for col in idx_fields:
         # using a list comprehension to still work if the idx field itself is an array
