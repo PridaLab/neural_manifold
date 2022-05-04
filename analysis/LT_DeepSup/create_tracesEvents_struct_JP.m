@@ -41,7 +41,6 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
     else
         session_type = 'None';
     end
-
     if length(session_names)>1
         %pipeline of analysis in case of LT_ROT (registration)
         if contains(session_type, 'LT_ROT', 'IgnoreCase',true)
@@ -71,12 +70,14 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
             local_to_global_guide_ROT = local_to_global_guide_ROT(Lib,:);
             
             %LT
+            fprintf('\nLT')
             tracesEvents = get_tracesEvents(files_LT,local_to_global_guide_LT, 'LT');
             tracesEvents.mouse = mouse_name;
             tracesEvents.session = session_number(1);
             save([save_data, '/',mouse_name,'_LTm_events_s', int2str(session_number(1)), '.mat'], "tracesEvents")
             
             %ROT1
+            fprintf('\nROT')
             tracesEvents = get_tracesEvents(files_ROT,local_to_global_guide_ROT, 'ROT');
             tracesEvents.mouse = mouse_name;
             tracesEvents.session = session_number(2);
@@ -144,7 +145,6 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     %Get sampling frequency
     times = traces_table{:,1};
     tracesEvents.sF = 1/median(diff(times));
-
     %Load spikes
     spikes_file_index = contains({files(:).name}, 'spikes', 'IgnoreCase',true) ...
                             .*~contains({files(:).name}, 'props', 'IgnoreCase',true);
@@ -152,31 +152,29 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     spikes_file_index = find(spikes_file_index);
     for file_num= 1:length(spikes_file_index)
         spikes_idx = spikes_file_index(file_num);
+        fprintf('\n%s', files(spikes_idx).name);
         spikes_table = readtable([files(spikes_idx).folder, '/',files(spikes_idx).name]);
         spikes_bi_array = zeros(size(traces_table,1), size(raw_props_table,1));
         spikes_amp_array = zeros(size(traces_table,1), size(raw_props_table,1));
-        [~, spikes_index]  = min(abs(spikes_table{:,1}-times'),[],2);
+        spikes_index = zeros(size(spikes_table,1),1);
+        %check og # of neurons on raw_props
+        div_edges = (1:10000:size(spikes_table,1)+1);
+        if div_edges(end)<=size(spikes_table,1)
+            div_edges = [div_edges, size(spikes_table,1)+1]; %#ok<AGROW> 
+        end
+        for batch = 1:length(div_edges)-1
+            [~,batch_idx] = min(abs(spikes_table{div_edges(batch):div_edges(batch+1)-1,1}-times'),[],2);
+            spikes_index(div_edges(batch):div_edges(batch+1)-1,1) = batch_idx;
+        end
         spikes_neuron = cell2mat(arrayfun(@(spike) str2double(spike{1}(2:end)), spikes_table{:,2}, 'UniformOutput', false));
         spikes_amplitude = spikes_table{:,3};
         linearidx = sub2ind(size(spikes_bi_array), spikes_index(:,1), spikes_neuron(:,1)+1);
-        spikes_bi_array(linearidx) = 1;
-        spikes_amp_array(linearidx) = spikes_amplitude;
-    
-        if contains(files(spikes_idx).name, 'SNR3')
-            tracesEvents.spikes_SNR3 = spikes_bi_array(:,local_to_global_guide(:,2)+1);
-            tracesEvents.spikes_SNR3_amp = spikes_amp_array(:,local_to_global_guide(:,2)+1);
-    
-        elseif contains(files(spikes_idx).name, 'SNR2')
-            tracesEvents.spikes_SNR2 = spikes_bi_array(:,local_to_global_guide(:,2)+1);
-            tracesEvents.spikes_SNR2_amp = spikes_amp_array(:,local_to_global_guide(:,2)+1);
-           
-        elseif contains(files(spikes_idx).name, 'SNR1_5')
-            tracesEvents.spikes_SNR1_5 = spikes_bi_array(:,local_to_global_guide(:,2)+1);
-            tracesEvents.spikes_SNR1_5_amp = spikes_amp_array(:,local_to_global_guide(:,2)+1);
-        else
-            tracesEvents.spikes_SNR1 = spikes_bi_array(:,local_to_global_guide(:,2)+1);
-            tracesEvents.spikes_SNR1_amp = spikes_amp_array(:,local_to_global_guide(:,2)+1);
-        end
+        spikes_bi_array(linearidx) = 1; %#ok<NASGU> 
+        spikes_amp_array(linearidx) = spikes_amplitude; %#ok<NASGU> 
+        name_file = files(spikes_idx).name;
+        name_field = strcat('spikes_',name_file(strfind(lower(name_file), 'spikes_')+7:end-4));
+        eval(strcat('tracesEvents.', name_field, ' = spikes_bi_array(:,local_to_global_guide(:,2)+1);'))
+        eval(strcat('tracesEvents.', name_field, '_amp = spikes_amp_array(:,local_to_global_guide(:,2)+1);'))
     end
     %{
     if sum(spikes_file_index)<1
@@ -189,7 +187,19 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     spikes_table = readtable([files(spikes_file_index).folder, '/',files(spikes_file_index).name]);
     spikes_bi_array = zeros(size(traces_table,1), size(raw_props_table,1));
     spikes_amp_array = zeros(size(traces_table,1), size(raw_props_table,1));
-    [~, spikes_index]  = min(abs(spikes_table{:,1}-times'),[],2);
+    try
+        [~, spikes_index]  = min(abs(spikes_table{:,1}-times'),[],2);
+    catch %if out of memory do it sequentially (>time but no need to allocate all)
+        spikes_index = zeros(size(spikes_table,1),1);
+        div_edges = (1:10000:size(spikes_table,1)+1);
+        if div_edges(end)<=size(spikes_table,1)
+            div_edges = [div_edges, size(spikes_table,1)+1];
+        end
+        for batch = 1:length(div_edges)-1
+            [~,batch_idx] = min(abs(spikes_table{div_edges(batch):div_edges(batch+1)-1,1}-times'),[],2);
+            spikes_index(div_edges(batch):div_edges(batch+1)-1,1) = batch_idx;
+        end
+    end
     spikes_neuron = cell2mat(arrayfun(@(spike) str2double(spike{1}(2:end)), spikes_table{:,2}, 'UniformOutput', false));
     spikes_amplitude = spikes_table{:,3};
     linearidx = sub2ind(size(spikes_bi_array), spikes_index(:,1), spikes_neuron(:,1)+1);
@@ -253,24 +263,18 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     end
     tracesEvents.velocity = sqrt(diff(tracesEvents.position(:,1)).^2+ diff(tracesEvents.position(:,2)).^2)/(1/20); 
     tracesEvents.velocity = [tracesEvents.velocity(1,1); tracesEvents.velocity];
-
     %Delete dropped frames
     tracesEvents.time = times;
     if isfield(tracesEvents,'droppedFrames')
         if ~isempty(tracesEvents.droppedFrames)
             tracesEvents.time(tracesEvents.droppedFrames,:) = [];
-
-            tracesEvents.spikes_SNR3(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR3_amp(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR2(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR2_amp(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR1_5(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR1_5_amp(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR1(tracesEvents.droppedFrames,:) = [];
-            tracesEvents.spikes_SNR1_amp(tracesEvents.droppedFrames,:) = [];
-
             tracesEvents.events(tracesEvents.droppedFrames,:) = [];
             tracesEvents.traces(tracesEvents.droppedFrames,:) = [];
+            fields = fieldnames(tracesEvents);
+            spike_fields = fields(contains(fields,'spikes_'));
+            for idx = 1:length(spike_fields)
+                eval(strcat('tracesEvents.',spike_fields{idx},'(tracesEvents.droppedFrames,:) = [];'))
+            end
             if length(tracesEvents.position)>length(tracesEvents.time)
                 tracesEvents.position(tracesEvents.droppedFrames,:) = [];
                 tracesEvents.velocity(tracesEvents.droppedFrames,:) = [];
@@ -280,8 +284,11 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
     end
     if sum(isnan(tracesEvents.traces(:,1)))>0
         tracesEvents.time(isnan(tracesEvents.traces(:,1)),:) = [];
-        tracesEvents.spikes(isnan(tracesEvents.traces(:,1)),:) = [];
-        tracesEvents.spikes_amp(isnan(tracesEvents.traces(:,1)),:) = [];
+        fields = fieldnames(tracesEvents);
+        spike_fields = fields(contains(fields,'spikes_'));
+        for idx = 1:length(spike_fields)
+            eval(strcat('tracesEvents.',spike_fields{idx},'(isnan(tracesEvents.traces(:,1)),:) = [];'))
+        end
         tracesEvents.events(isnan(tracesEvents.traces(:,1)),:) = [];
         if length(tracesEvents.position)>length(tracesEvents.time)
             tracesEvents.position(isnan(tracesEvents.traces(:,1)),:) = [];
@@ -290,16 +297,41 @@ function [tracesEvents] = get_tracesEvents(files,local_to_global_guide, conditio
                 tracesEvents.position = tracesEvents.position(1:length(tracesEvents.time),:);
                 tracesEvents.velocity = tracesEvents.velocity(1:length(tracesEvents.time),:);
             end
-    
         end
         tracesEvents.traces(isnan(tracesEvents.traces(:,1)),:) = [];
     end
+    % check position initial tracking
+    if all(tracesEvents.position(1,:) == 0)
+        initial_zeros = find(all(tracesEvents.position == 0, 2));
+        tracesEvents.time(initial_zeros,:) = [];
+        tracesEvents.position(initial_zeros,:) = [];
+        tracesEvents.velocity(initial_zeros,:) = [];
+        tracesEvents.events(initial_zeros,:) = [];
+        tracesEvents.traces(initial_zeros,:) = [];
+        fields = fieldnames(tracesEvents);
+        spike_fields = fields(contains(fields,'spikes_'));
+        for idx = 1:length(spike_fields)
+            eval(strcat('tracesEvents.',spike_fields{idx},'(initial_zeros,:) = [];'))
+        end
+    end
+    if size(tracesEvents.position,1)<size(tracesEvents.traces,1)
+        end_idx = size(tracesEvents.position,1)+1;
+        tracesEvents.time(end_idx:end,:) = [];
+        tracesEvents.events(end_idx:end,:) = [];
+        tracesEvents.traces(end_idx:end,:) = [];
+        fields = fieldnames(tracesEvents);
+        spike_fields = fields(contains(fields,'spikes_'));
+        for idx = 1:length(spike_fields)
+            eval(strcat('tracesEvents.',spike_fields{idx},'(end_idx:end,:) = [];'))
+        end
+    end
     %Check for size consistency across all signals
+    %{
     if length(unique([size(tracesEvents.position,1),size(tracesEvents.traces,1), ...
             size(tracesEvents.spikes_SNR3,1),size(tracesEvents.events,1)]))>1
         warning("Signals for condition %s do not have the same time duration!", condition)
     end
-
+    %}
     %load cells images
     image_file_index = contains({files(:).name}, '.tif', 'IgnoreCase',true) ...
                            .*contains({files(:).name}, 'contours', 'IgnoreCase',true);
