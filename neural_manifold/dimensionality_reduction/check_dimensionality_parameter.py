@@ -6,177 +6,103 @@ Created on Tue Mar 15 17:40:39 2022
 @author: julio
 """
 
-import numpy as np
-import pandas as pd
 import copy
-
+import numpy as np
 from neural_manifold import general_utils as gu
+from neural_manifold import decoders as dec 
 from neural_manifold import structure_index as sI 
-import neural_manifold.decoders as dec
-import neural_manifold.dimensionality_reduction as dim_red
+from neural_manifold import dimensionality_reduction as dim_red
 
 
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
+	#CHECK INPUTS
+	if 'ks_list' in kwargs:
+		ks_list = kwargs['ks_list']
+	else:
+		ks_list = [0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,2,5,10,np.inf]
 
-import umap
-from sklearn.metrics import median_absolute_error, explained_variance_score
+	if 'assymetry_list' in kwargs:
+		assymetry_list = kwargs['assymetry_list']
+	else:
+		assymetry_list = [False, True]
 
+	if 'sI_nn_list' in kwargs:
+		sI_nn_list = kwargs['sI_nn_list']
+	else:
+		sI_nn_list = [3, 10, 20, 50, 100, 200]
 
-def check_kernel_size(input_object = None, spikes_signal = None, traces_signal = None, behavioral_signal = None, 
-                  fs = None, std_kernels = [0, 0.05, 0.1, 0.2, 0.4, 1, np.inf], n_neigh = 0.01, ndim= 3, 
-                  trial_signal = None, n_splits = 5, assymetry = True, verbose = False):
-    
-    #check signal input
-    if isinstance(input_object, pd.DataFrame):
-        spikes_signal = gu.dataframe_to_1array_translator(input_object,spikes_signal)
-    elif isinstance(spikes_signal,np.ndarray):
-        spikes_signal = copy.deepcopy(spikes_signal)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")                 
-                 
-    #check traces signal
-    if isinstance(input_object, pd.DataFrame) and isinstance(traces_signal, str):
-        traces_signal = gu.dataframe_to_1array_translator(input_object,traces_signal)
-    elif isinstance(traces_signal,np.ndarray):
-        traces_signal = copy.deepcopy(traces_signal)
-        
-    #check behavioral signal
-    if isinstance(input_object, pd.DataFrame):
-        if isinstance(behavioral_signal, str):
-            behavioral_signal = list([gu.dataframe_to_1array_translator(input_object,behavioral_signal)])
-        elif isinstance(behavioral_signal, list):
-             behavioral_signal = gu.dataframe_to_manyarray_translator(input_object,behavioral_signal)
-        else:
-            raise ValueError("If 'input_object' provided, behavioral signal must be a string or a list of string.")
-    elif isinstance(behavioral_signal, np.ndarray):
-        behavioral_signal = list(copy.deepcopy(behavioral_signal))
-    elif isinstance(behavioral_signal, list):
-        if isinstance(behavioral_signal[0], np.ndarray):
-            behavioral_signal = copy.deepcopy(behavioral_signal)
-        else:
-            raise ValueError("If 'behavioral_signal' is a list and 'input_object' is not provided, it must " +
-                             f"be composed of numpy arrays. However it was {type(behavioral_signal[0])}.")
-    behLimits = [(np.percentile(beh,5), np.percentile(beh,95)) for beh in behavioral_signal]
+	if 'decoder_list' in kwargs:
+		decoder_list = kwargs['decoder_list']
+	else:
+		decoder_list = ["wf", "wc", "xgb", "svr"]
 
-    #check neighbours
-    if n_neigh<1:
-        if verbose:
-           print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(spikes_signal.shape[0]*n_neigh).astype(np.uint32)
-        if verbose:
-            print(f"Resulting in {n_neigh} neighbours.")
-            
-    #check sampling frequency
-    if isinstance(fs, type(None)):
-        if isinstance(input_object, pd.DataFrame):
-            columns_name = [col for col in input_object.columns.values]
-            lower_columns_name = [col.lower() for col in input_object.columns.values]
-            if 'bin_size' in lower_columns_name:
-                bin_size = input_object.iloc[0][columns_name[lower_columns_name.index("bin_size")]]
-            elif 'fs' in lower_columns_name:
-                bin_size = 1/input_object.iloc[0][columns_name[lower_columns_name.index("fs")]]
-            elif 'sf' in lower_columns_name:
-                bin_size = 1/input_object.iloc[0][columns_name[lower_columns_name.index("sf")]]
-            else:
-                raise ValueError('Dataframe does not contain binsize, sf, or fs field.')
-    else:
-        bin_size = 1/fs
-        
-    #check trial signal to divide train/test in decoders
-    if isinstance(trial_signal, np.ndarray): #user inputs an independent array for sI
-        trial_signal = copy.deepcopy(trial_signal)
-    elif isinstance(trial_signal, str):
-        trial_signal = gu.dataframe_to_1array_translator(input_object,trial_signal)
-    else:
-        trial_signal = None 
-        
-    #initialize outputs
-    emb_space = np.linspace(0,ndim-1, ndim).astype(int)
-    signal_comparison = np.zeros((3, len(std_kernels)))
-    emb_memory = np.zeros((spikes_signal.shape[0], ndim, len(std_kernels)))
-    trust = np.zeros((1, len(std_kernels)))
-    sI_array = np.zeros((len(behavioral_signal), len(std_kernels)))
-    R2s = np.zeros((n_splits, len(behavioral_signal), 2, 2, 4, len(std_kernels)))
-    
-    dim_dict = dict()
-    dim_dict['inner_dim'] = np.zeros((len(std_kernels)))
-    dim_dict['inner_dim_radii_vs_nn'] = np.zeros((1000,2, len(std_kernels)))*np.nan
-    dim_dict['num_trust'] = np.zeros((2,len(std_kernels)))
-    dim_dict['res_var'] = np.zeros((2,len(std_kernels)))
-    dim_dict['rec_error'] = np.zeros((2,len(std_kernels)))
-    #iterate over each kernel size
-    for kernel_index, stdk in enumerate(std_kernels):
-        if verbose:
-            print(f'Kernel: {stdk:.2f} ms ({kernel_index+1}/{len(std_kernels)})')
-        #Compute firing rate
-        if stdk==0:
-            X_signal = copy.deepcopy(spikes_signal)
-        elif stdk==np.inf:
-            X_signal = copy.deepcopy(traces_signal)
-        else:
-            win_size = np.round(stdk*bin_size*10).astype(np.uint32)
-            win = gu.norm_gauss_window(bin_size, stdk, num_bins = win_size, assymetry = True)
-            X_signal = gu.smooth_data(spikes_signal, win=win)/bin_size
-            
-        #compare signal to traces
-        signal_comparison[0, kernel_index] = np.corrcoef(X_signal.reshape(-1,1).T, traces_signal.reshape(-1,1).T)[0,1]
-        signal_comparison[1, kernel_index] = median_absolute_error(X_signal, traces_signal)
-        signal_comparison[2, kernel_index] = explained_variance_score(X_signal, traces_signal)
-        
-        #check inner dimensionality
-        m , radius, neigh = dim_red.compute_inner_dim(X_signal)
-        dim_dict['inner_dim'][kernel_index] = m
-        dim_dict['inner_dim_radii_vs_nn'][radius.shape[0],:,kernel_index] = np.hstack((radius, neigh))
-        
-        
-        #check umap trustworthiness dimensionality
-        dim, num_trust = dim_red.compute_umap_trust_dim(X_signal, n_neigh = n_neigh, max_dim = 8,verbose=False)
-        dim_dict['num_trust'][0,kernel_index] = dim
-        if not np.isnan(dim):
-            dim_dict['num_trust'][1,kernel_index] = num_trust[dim-1,0]
-        else:
-            dim_dict['num_trust'][1,kernel_index] = np.nan
-        
-        #compute isomap resvar dim
-        dim, res_var = dim_red.compute_isomap_resvar_dim(X_signal, n_neigh = n_neigh, max_dim = 8,verbose=False)
-        dim_dict['res_var'][0,kernel_index] = dim
-        if not np.isnan(dim):
-            dim_dict['res_var'][1,kernel_index] = res_var[dim-1,0]
-        else:
-            dim_dict['res_var'][1,kernel_index] = np.nan
-        
-        #compute isomap reconstruction error
-        dim, rec_error = dim_red.compute_isomap_recerror_dim(X_signal, n_neigh = n_neigh, max_dim = 8,verbose=False)
-        dim_dict['rec_error'][0,kernel_index] = dim
-        if not np.isnan(dim):
-            dim_dict['rec_error'][1,kernel_index] = rec_error[dim-1,0]
-        else:
-            dim_dict['rec_error'][1,kernel_index] = np.nan
-        
-        #project data
-        model = umap.UMAP(n_neighbors=n_neigh, n_components =ndim, min_dist=0.75)
-        emb_memory[:,:,kernel_index] = model.fit_transform(X_signal)
-        
-        #compute trustworthiness
-        #trust[0, kernel_index] = validation.trustworthiness_vector(X_signal, emb_memory[:,:,kernel_index] ,n_neigh)[-1]
-        
-        #compute structure index
-        for behavioral_index, behavioral_values in enumerate(behavioral_signal):
-            if behavioral_values.ndim>1:
-                behavioral_values = behavioral_values[:,0]
-            minVal, maxVal = behLimits[behavioral_index]
-            sI_array[behavioral_index, kernel_index], _, _ = sI.compute_structure_index(emb_memory[:,:,kernel_index],
-                                                                               behavioral_values, 20, emb_space,
-                                                                               0, vmin= minVal, vmax = maxVal)
-            
-        #compute decoder error
-        R2s_temp = dec.decoders_1D(X_signal, input_label = behavioral_signal, emb_list = ["umap"], input_trial = trial_signal,
-                                    n_dims = ndim, n_splits = n_splits, verbose = verbose)
-                                    
-        for signal_idx, signal_name in enumerate(list(R2s_temp.keys())):
-            for dec_idx, dec_name in enumerate(list(R2s_temp[signal_name].keys())):
-                R2s[:,:,:, signal_idx, dec_idx, kernel_index] = R2s_temp[signal_name][dec_name]
-                
-                
-    return signal_comparison, dim_dict, emb_memory, trust, sI_array, R2s
+	if 'n_splits' in kwargs:
+		n_splits = kwargs['n_splits']
+	else:
+		n_splits = 10
+
+	if 'verbose' in kwargs:
+		verbose = kwargs['verbose']
+	else:
+		verbose = False
+ 
+	#START 
+	rates_field =  spikes_field.replace("spikes", "rates")
+	sI_kernel = np.zeros((len(ks_list), len(assymetry_list), len(sI_nn_list)))
+	R2s_kernel = np.zeros((len(ks_list), len(assymetry_list), n_splits, len(decoder_list)))
+	dim_kernel = np.zeros((len(ks_list), len(assymetry_list)))
+	if 'index_mat' not in pd_struct:
+		pd_struct["index_mat"] = [np.zeros((pd_struct[spikes_field][idx].shape[0],1))+
+									pd_struct["trial_id"][idx] for idx in pd_struct.index]
+
+	for ks_idx, ks_val in enumerate(ks_list):
+		if verbose:
+			print(f"Kernel_size: {ks_val} ({ks_idx+1}/{len(ks_list)})")
+		for assy_idx, assy_val in enumerate(assymetry_list):
+			if verbose:
+				print(f"\tAssymetry: {assy_val} ({assy_idx+1}/{len(assymetry_list)})")
+
+			#compute firing rates with new ks_val
+			if ks_val == 0:
+				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
+				rates =  copy.deepcopy(np.concatenate(pd_struct_mov[spikes_field].values, axis=0))
+			elif ks_val == np.inf:
+				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
+				rates =  copy.deepcopy(np.concatenate(pd_struct_mov[traces_field].values, axis=0))
+			else:
+				pd_struct = gu.add_firing_rates(pd_struct,'smooth', std=ks_val, num_std=5, 
+															assymetry=assy_val, continuous=True)
+				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
+				rates = copy.deepcopy(np.concatenate(pd_struct_mov[rates_field].values, axis=0))
+
+			pos = copy.deepcopy(np.concatenate(pd_struct_mov['pos'].values, axis=0))
+
+			#1. Check decoder ability
+			trial_idx = copy.deepcopy(np.concatenate(pd_struct_mov['index_mat'].values, axis=0))
+			R2s_temp, _ = dec.decoders_1D(x_base_signal=rates,y_signal_list=pos[:,0],n_splits=n_splits,
+									decoder_list=decoder_list,trial_signal=trial_idx,verbose=verbose)
+
+			for dec_idx, dec_name in enumerate(decoder_list):
+				R2s_kernel[ks_idx, assy_idx,:, dec_idx] = R2s_temp['base_signal'][dec_name][:,0,0]
+
+			#2. Check structure index
+			rates_space = np.linspace(0,rates.shape[1]-1, rates.shape[1]).astype(int)
+			posLimits = [np.percentile(pos[:,0],5), np.percentile(pos[:,0],95)]
+			if verbose:
+				print("\t\tSI: X/X", end = '', sep = '')
+				pre_del = '\b\b\b'
+			for nn_idx, nn_val in enumerate(sI_nn_list):
+				if verbose:
+					print(f"{pre_del}{nn_idx+1}/{len(sI_nn_list)}", sep = '', end = '')
+					pre_del =  (len(str(nn_idx+1))+len(str(len(sI_nn_list)))+1)*'\b'
+				temp,_ , _ = sI.compute_structure_index(rates,pos[:,0],10,rates_space,0,nn=nn_val,
+	        													vmin=posLimits[0],vmax=posLimits[1])
+				sI_kernel[ks_idx, assy_idx, nn_idx] = temp
+
+			#3. Check inner dimension
+			if verbose:
+				print("\t\tInner dimension")
+			dim_kernel[ks_idx, assy_idx],_,_ = dim_red.compute_inner_dim(base_signal=rates,min_neigh=2, 
+																max_neigh = int(rates.shape[0]*0.1))
+
+	return R2s_kernel, sI_kernel, dim_kernel
