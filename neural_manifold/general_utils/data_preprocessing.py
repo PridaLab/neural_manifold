@@ -12,7 +12,7 @@ from scipy.ndimage import convolve1d
 import warnings
 
 #Adapted from PyalData (19/10/21) (add lower case, and continuous option)
-def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous = False, num_bins = 10, assymetry = False):
+def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous = False, num_std = 5, assymetry = False):
     """
     Add firing rate fields calculated from spikes fields
 
@@ -55,7 +55,7 @@ def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous
             if hw is not None:
                 std = hw_to_std(hw)
                 
-            win = norm_gauss_window(bin_size, std, num_bins = num_bins, assymetry = assymetry)
+            win = norm_gauss_window(bin_size, std, num_std = num_std, assymetry = assymetry)
             
         def get_rate(spikes):
             return smooth_data(spikes, win=win)/bin_size
@@ -82,7 +82,7 @@ def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous
 
 
 #Adapted from PyalData package (19/10/21) (added assymetry, and variable win_length)
-def norm_gauss_window(bin_size, std, num_bins = 10, assymetry = False):
+def norm_gauss_window(bin_size, std, num_std = 5, assymetry = False):
     """
     Gaussian window with its mass normalized to 1
 
@@ -94,19 +94,20 @@ def norm_gauss_window(bin_size, std, num_bins = 10, assymetry = False):
     std (float): standard deviation of the window use hw_to_std to calculate 
                 std based from half-width (same time units as bin_size)
                 
-    num_bins (int): number of bins of the window to convolve
+    num_std (int): size of the window to convolve in #of stds
 
     Returns
     -------
     win (1D np.array): Gaussian kernel with length: num_bins*std/bin_length
                 mass normalized to 1
     """
-    win_len = int(num_bins*std/bin_size)
+    win_len = int(num_std*std/bin_size)
     if win_len%2==0:
         win_len = win_len+1
     win = scs.gaussian(win_len, std/bin_size)
     if assymetry:
-        win[:int((win_len-1)/2)] = 0
+        win_2 = scs.gaussian(win_len, 0.5*std/bin_size)
+        win[:int((win_len-1)/2)] = win_2[:int((win_len-1)/2)]
         
     return win / np.sum(win)
 
