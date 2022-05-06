@@ -25,20 +25,17 @@ from neural_manifold import structure_index as sI
 from neural_manifold.decoders import decoders_1D
 from neural_manifold.dimensionality_reduction import validation as dim_validation 
 
-
-def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**5, verbose=False):
+@gu.check_inputs_for_pd
+def compute_inner_dim(base_signal = None, min_neigh = 2, max_neigh = 2**5, verbose=False):
     '''Compute internal dimensionality of data array as described in: https://doi.org/10.1038/s41467-019-12724-2
     
     Parameters:
     ----------
-        input_object (DataFrame or numpy Array): object containing the signal one wants to estimate the 
+        base_signal (Dnumpy Array): array containing the signal one wants to estimate the 
                         internal dimensionality.
         
     Optional parameters:
     --------------------
-        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
-        
         min_neigh (float): minimum number neighbours used to defined the range in which to compute the 
                         internal dimmensionality. If value smaller than 1 and the same for max_neigh, it is 
                         interpreted as fracion of total number of samples. 
@@ -57,20 +54,12 @@ def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**
         neigh  (array): mean number of neighbours for all samples for each ball radius (specified in radius)
                         in log2 base.
     '''
-    #Check inputs
-    if isinstance(input_object, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_object,field)
-    elif isinstance(input_object,np.ndarray):
-        signal = copy.deepcopy(input_object)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
-        
     #Check shape ratio
-    if signal.shape[0]<signal.shape[1]:
-        warnings.warn("Shape[0] of signal is smaller than Shape[1]. Note that " +
+    if base_signal.shape[0]<base_signal.shape[1]:
+        warnings.warn("Shape[0] of base_signal is smaller than Shape[1]. Note that " +
                       "function considers rows to be samples and cols to be features.",SyntaxWarning)
     #Check that array is 1D or 2D
-    if signal.ndim>2:
+    if base_signal.ndim>2:
         raise ValueError("Signal has more than 2 dimensions. Will only consider the first two.")
     #Check min_neigh, max_neigh numbers
     if min_neigh>=max_neigh:
@@ -78,12 +67,12 @@ def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**
     if min_neigh<1 and max_neigh<1:
         if verbose:
             print("'min_neigh' and 'max_neigh' arguments smaller than 1. Interpreting them as fraction of total number of samples.")
-        min_neigh = signal.shape[0]*min_neigh
-        max_neigh = signal.shape[0]*max_neigh
+        min_neigh = base_signal.shape[0]*min_neigh
+        max_neigh = base_signal.shape[0]*max_neigh
         if verbose:
             print("Resulting in min_neigh=%i and max_neigh=%i" %(min_neigh, max_neigh))
     #Compute pairwise distances between all samples
-    D_pw = pairwise_distances(signal,metric = 'euclidean')
+    D_pw = pairwise_distances(base_signal,metric = 'euclidean')
     #Compute min distance between samples
     min_dist = np.min(D_pw)
     if min_dist == 0:
@@ -119,22 +108,19 @@ def compute_inner_dim(input_object, field = None, min_neigh = 2, max_neigh = 2**
         print('Could not compute internal dimension. Probably check range (min_neigh, max_neigh)')
         return np.nan, radius, neigh
     
-
-def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
+@gu.check_inputs_for_pd
+def compute_umap_trust_dim(base_signal = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
     '''Compute dimensionality of data array according to UMAP trustworthiness (see Venna, Jarkko, and Samuel Kaski.
     "Local multidimensional scaling with controlled tradeoff between trustworthiness and continuity." Proceedings 
     of 5th Workshop on Self-Organizing Maps. 2005.)
     
     Parameters:
     -----------
-        input_object (DataFrame or numpy Array): object containing the signal one wants to project using UMAP 
+        base_signal (array): array containing the signal one wants to project using UMAP 
                         to estimate dimensionality.
         
     Optional parameters:
-    -------------------
-        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
-        
+    ------------------- 
         n_neigh (float): number of neighbours used to compute UMAP projection.
         
         max_dim (int): maximum number of dimensions to check (note this parameters is the main time-expensive)
@@ -155,40 +141,33 @@ def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10
         return_emb_list (list): list containing the UMAP projections computed for each of the dimensionalities.
                         (only applicable if input parameter 'return_emb' set to True)
     '''
-    #Check inputs
-    if isinstance(input_object, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_object,field)
-    elif isinstance(input_object,np.ndarray):
-        signal = copy.deepcopy(input_object)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
     #Check consistency of maximum dimensionality
-    if max_dim>signal.shape[1]:
+    if max_dim>base_signal.shape[1]:
         if verbose:
             print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
-                          "dimensions (%i). Setting the first to the later." %(signal.shape[1]))
-        max_dim = signal.shape[1]
+                          "dimensions (%i). Setting the first to the later." %(base_signal.shape[1]))
+        max_dim = base_signal.shape[1]
     #Check number of neighbours
     if n_neigh<1:
         if verbose:
            print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
         if verbose:
             print("Resulting in %i neighbours." %(n_neigh))
     #check if user wants the different embedings backs
     if return_emb:
         return_emb_list = list()
-    #compute ranking order of source signal
+    #compute ranking order of source base_signal
     if verbose:
-        print('Computing ranking order of source signal')
-    signal_indices = dim_validation.compute_rank_indices(signal)
+        print('Computing ranking order of base_signal')
+    signal_indices = dim_validation.compute_rank_indices(base_signal)
     #initialize variables 
     num_trust = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
         if verbose:
             print('Checking dimension %i' %(dim), sep='', end = '')
-        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(signal)
-        num_trust[dim-1,0] = dim_validation.trustworthiness_vector(signal, emb ,n_neigh, indices_source = signal_indices)[-1]
+        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(base_signal)
+        num_trust[dim-1,0] = dim_validation.trustworthiness_vector(base_signal, emb ,n_neigh, indices_source = signal_indices)[-1]
         if return_emb:
             return_emb_list.append(emb)
         if dim>1:
@@ -213,21 +192,19 @@ def compute_umap_trust_dim(input_object, field = None, n_neigh= 0.01, max_dim=10
     else:
         return dim, num_trust
 
-def compute_umap_continuity_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
+@gu.check_inputs_for_pd
+def compute_umap_continuity_dim(base_signal = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
     '''Compute dimensionality of data array according to UMAP continuity (see Venna, Jarkko, and Samuel Kaski.
     "Local multidimensional scaling with controlled tradeoff between trustworthiness and continuity." Proceedings 
     of 5th Workshop on Self-Organizing Maps. 2005.)
     
     Parameters:
     -----------
-        input_object (DataFrame or numpy Array): object containing the signal one wants to project using UMAP 
+        base_signal (numpy Array): array containing the signal one wants to project using UMAP 
                         to estimate dimensionality.
         
     Optional parameters:
     -------------------
-        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
-        
         n_neigh (float): number of neighbours used to compute UMAP projection.
         
         max_dim (int): maximum number of dimensions to check (note this parameters is the main time-expensive)
@@ -248,39 +225,32 @@ def compute_umap_continuity_dim(input_object, field = None, n_neigh= 0.01, max_d
         return_emb_list (list): list containing the UMAP projections computed for each of the dimensionalities.
                         (only applicable if input parameter 'return_emb' set to True)
     '''
-    #Check inputs
-    if isinstance(input_object, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_object,field)
-    elif isinstance(input_object,np.ndarray):
-        signal = copy.deepcopy(input_object)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
     #Check consistency of maximum dimensionality
-    if max_dim>signal.shape[1]:
+    if max_dim>base_signal.shape[1]:
         if verbose:
             print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
-                          "dimensions (%i). Setting the first to the later." %(signal.shape[1]))
-        max_dim = signal.shape[1]
+                          "dimensions (%i). Setting the first to the later." %(base_signal.shape[1]))
+        max_dim = base_signal.shape[1]
     #Check number of neighbours
     if n_neigh<1:
         if verbose:
            print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
         if verbose:
             print("Resulting in %i neighbours." %(n_neigh))
     #check if user wants the different embedings backs
     if return_emb:
         return_emb_list = list()
-    #compute ranking order of source signal
+    #compute ranking order of source base_signal
     if verbose:
-        print('Computing ranking order of source signal')
+        print('Computing ranking order of base_signal')
     #initialize variables 
     num_cont = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
         if verbose:
             print('Checking dimension %i ' %(dim), sep='', end = '')
-        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(signal)
-        num_cont[dim-1,0] = dim_validation.continuity_vector(signal, emb ,n_neigh)[-1]
+        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(base_signal)
+        num_cont[dim-1,0] = dim_validation.continuity_vector(base_signal, emb ,n_neigh)[-1]
         if return_emb:
             return_emb_list.append(emb)
         if dim>1:
@@ -306,20 +276,17 @@ def compute_umap_continuity_dim(input_object, field = None, n_neigh= 0.01, max_d
         return dim, num_cont
 
 
-
-def compute_isomap_resvar_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
+@gu.check_inputs_for_pd
+def compute_isomap_resvar_dim(base_signal = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
     '''Compute dimensionality of data array according to isomap residual variance.
     
     Parameters:
     -----------
-        input_object (DataFrame or numpy Array): object containing the signal one wants to project using Isomap
+        base_signal (numpy Array): array containing the signal one wants to project using Isomap
                         to estimate dimensionality.
         
     Optional parameters:
     -------------------
-        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
-        
         n_neigh (float): number of neighbours used to compute Isomap projection.
         
         max_dim (int): maximum number of dimensions to check.
@@ -337,30 +304,23 @@ def compute_isomap_resvar_dim(input_object, field = None, n_neigh= 0.01, max_dim
         emb (array): Isomap embedding computed for each of the dimensionalities. (only applicable if input 
                         parameter 'return_emb' set to True)
     '''
-    #Check inputs
-    if isinstance(input_object, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_object,field)
-    elif isinstance(input_object,np.ndarray):
-        signal = copy.deepcopy(input_object)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
     #Check consistency of maximum dimensionality
-    if max_dim>signal.shape[1]:
+    if max_dim>base_signal.shape[1]:
         if verbose:
             print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
-                      "dimensions (%i). Setting the first to the later." %(signal.shape[1]))
-        max_dim = signal.shape[1]
+                      "dimensions (%i). Setting the first to the later." %(base_signal.shape[1]))
+        max_dim = base_signal.shape[1]
     #Check number of neighbours
     if n_neigh<1:
         if verbose:
            print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
         if verbose:
             print("Resulting in %i neighbours." %(n_neigh))
     #initialize isomap object
     iso_model = Isomap(n_neighbors = n_neigh, n_components = max_dim)
     #fit and project data
-    emb = iso_model.fit_transform(signal)
+    emb = iso_model.fit_transform(base_signal)
     #compute residual variance
     res_var = np.zeros((max_dim, 1))
     for dim in range(1, max_dim+1):
@@ -383,20 +343,17 @@ def compute_isomap_resvar_dim(input_object, field = None, n_neigh= 0.01, max_dim
     else:
         return dim, res_var
     
-    
-def compute_isomap_recerror_dim(input_object, field = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
+@gu.check_inputs_for_pd    
+def compute_isomap_recerror_dim(base_signal = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
     '''Compute dimensionality of data array according to isomap reconstruction error.
     
     Parameters:
     -----------
-        input_object (DataFrame or numpy Array): object containing the signal one wants to project using Isomap
+        base_signal (numpy Array): array containing the signal one wants to project using Isomap
                         to estimate dimensionality.
         
     Optional parameters:
     -------------------
-        field (string): if 'input_object' is a dataframe, name of column with the signal (otherwise set it 
-                        to None, as per default).
-        
         n_neigh (float): number of neighbours used to compute Isomap projection.
         
         max_dim (int): maximum number of dimensions to check.
@@ -415,24 +372,17 @@ def compute_isomap_recerror_dim(input_object, field = None, n_neigh= 0.01, max_d
         emb (array): Isomap embedding computed for each of the dimensionalities. (only applicable if input 
                         parameter 'return_emb' set to True)
     '''
-    #Check inputs
-    if isinstance(input_object, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_object,field)
-    elif isinstance(input_object,np.ndarray):
-        signal = copy.deepcopy(input_object)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
     #Check consistency of maximum dimensionality
-    if max_dim>signal.shape[1]:
+    if max_dim>base_signal.shape[1]:
         if verbose:
             print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
-                          "dimensions (%i). Setting the first to the later." %(signal.shape[1]))
-        max_dim = signal.shape[1]
+                          "dimensions (%i). Setting the first to the later." %(base_signal.shape[1]))
+        max_dim = base_signal.shape[1]
     #Check number of neighbours
     if n_neigh<1:
         if verbose:
            print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
         if verbose:
             print("Resulting in %i neighbours." %(n_neigh))
     #define kernel function
@@ -440,12 +390,12 @@ def compute_isomap_recerror_dim(input_object, field = None, n_neigh= 0.01, max_d
     #initialize isomap object
     iso_model = Isomap(n_neighbors = n_neigh, n_components = max_dim)
     #fit and project data
-    emb = iso_model.fit_transform(signal)
+    emb = iso_model.fit_transform(base_signal)
     #compute Isomap kernel for input data once before going into the loop
     KD_signal = K(iso_model.dist_matrix_)
     #compute residual error
     rec_error = np.zeros((max_dim, 1))
-    n_samples = signal.shape[0]
+    n_samples = base_signal.shape[0]
     for dim in range(1, max_dim+1):
         D_emb = pairwise_distances(emb[:,:dim], metric = 'euclidean')
         KD_emb = K(D_emb)
