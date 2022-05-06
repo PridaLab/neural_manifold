@@ -684,7 +684,7 @@ def _compute_inner_dim(df_dict, field, save_plot_dir, mouse, kwargs):
         if kwargs["verbose"]:
             count += 1
             print('\tWorking on entry %i/' %count, '%i: ' %len(kwargs["fnames"]), file, sep='')   
-        m, radius, neigh = dim_red.compute_inner_dim(pd_struct, field)
+        m, radius, neigh = dim_red.compute_inner_dim(pd_object = pd_struct, base_signal = field)
         internal_dim[file + "_internal_dim"] = m
         internal_dim[file + "_radii_vs_nn"] = np.hstack((radius, neigh))
         if kwargs["verbose"]:
@@ -991,7 +991,7 @@ def _compute_umap_LT(df_dict, field, umap_field, still_dict, fail_dict, neighbou
             #check number of dimensions value
             if isinstance(kwargs["umap_dims"],str):
                 if 'optimize_to_umap_trust' in kwargs["umap_dims"]:
-                    umap_dim, num_trust =dim_red.compute_umap_trust_dim(pd_struct,field,n_neigh=nn, 
+                    umap_dim, num_trust =dim_red.compute_umap_trust_dim(pd_object = pd_struct,base_signal = field,n_neigh=nn, 
                                                                     min_dist=min_dist, verbose=kwargs["verbose"])  
                     if umap_dim<3:
                         umap_dim = 3
@@ -1039,7 +1039,7 @@ def _compute_umap_LT(df_dict, field, umap_field, still_dict, fail_dict, neighbou
             nn = neighbours
         if isinstance(kwargs["umap_dims"],str):
             if 'optimize_to_umap_trust' in kwargs["umap_dims"]:
-                umap_dim, num_trust =dim_red.compute_umap_trust_dim(data_array,n_neigh=nn, 
+                umap_dim, num_trust =dim_red.compute_umap_trust_dim(base_signal = data_array,n_neigh=nn, 
                                                                 min_dist=min_dist, verbose=kwargs["verbose"])  
                 if umap_dim<3:
                     umap_dim = 3
