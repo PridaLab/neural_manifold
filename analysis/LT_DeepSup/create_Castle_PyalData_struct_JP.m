@@ -1,7 +1,7 @@
 %% RESTART
 close all; clear; clc;
 %% FILE
-data_file =  'CZ3_allo_events_s3.mat';
+data_file =  'GC3_allo_events_s3.mat';
 % Load file
 load(data_file);
 %% DEFINE MAZE SECTIONS
