@@ -1,6 +1,6 @@
 close all; clear all; clc;
 %%
-data_file =  'GC2_ALLO_events_s5.mat';
+data_file =  'CZ3_lt_events_s1.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -499,7 +499,7 @@ linkaxes([ax1,ax2],'x');
 %% create trial structure
 for ii = 1:size(cState_exp,1)-1
     trial_data(ii).mouse = tracesEvents.mouse;
-    trial_data(ii).date = '2022';
+    trial_data(ii).date = date;
     trial_data(ii).task = 'Linear-Track';
     trial_data(ii).session =  tracesEvents.session;
 
