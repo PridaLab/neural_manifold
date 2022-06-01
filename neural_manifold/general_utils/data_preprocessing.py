@@ -36,8 +36,8 @@ def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous
         trial_data with '_rates' fields added
     """
     out_frame = copy.deepcopy(data_frame)
-    spike_fields = [name for name in out_frame.columns.values if name.lower().__contains__("spikes")]
-    rate_fields = [name.replace("spikes", "rates") for name in spike_fields]
+    spike_fields = [name for name in out_frame.columns.values if (name.lower().__contains__("spikes") or name.lower().__contains__("events"))]
+    rate_fields = [name.replace("spikes", "rates").replace("events", "revents") for name in spike_fields]
     columns_name = [col for col in out_frame.columns.values]
     lower_columns_name = [col.lower() for col in out_frame.columns.values]
     if 'bin_size' in lower_columns_name:
@@ -237,11 +237,14 @@ def remove_low_firing_neurons(trial_data, signal, threshold=None, divide_by_bin_
     
     if signal.endswith("_spikes"):
         suffix = "_spikes"
+        unit_guide = signal[:-len(suffix)] + "_unit_guide"
+
     elif signal.endswith("_rates"):
         suffix = "_rates"
+        unit_guide = signal[:-len(suffix)] + "_unit_guide"
     else:
         warnings.warn("Could not determine which unit_guide to modify.")
-    unit_guide = signal[:-len(suffix)] + "_unit_guide"
+        unit_guide = None
     if unit_guide in trial_data.columns:
         trial_data[unit_guide] = [arr[mask, :] for arr in trial_data[unit_guide]]
     if verbose:
