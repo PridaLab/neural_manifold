@@ -1,66 +1,67 @@
-close all; clear all; clc;
+close all; clear ; clc;
 %%
-data_file =  'CZ3_lt_events_s1.mat';
+data_file =  'GC1_rot_events_s7.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
 fh1 = figure('units','normalized','outerposition',[0 0 1 1]);
 subplot(4,1,[1,2,3])
 imshow(tracesEvents.frame)
+%title("Draw left line")
+%leftLim =  drawline(gca);
+%title("Draw right line")
+%rightLim = drawline(gca);
+%title("Press enter to continue")
+%pause;
 
-title("Draw left line")
-leftLim =  drawline(gca);
-title("Draw right line")
-rightLim = drawline(gca);
-title("Press enter to continue")
-pause;
-figure(fh1)
-if sum(contains(fieldnames(tracesEvents), 'ceroxy', 'IgnoreCase',true))==0
-    title("Click on bottom-left corner of the track w/ right-click")
-    [x,y] = getpts(fh1);
-    tracesEvents.ceroXY = [x, y];
-    if prctile(tracesEvents.position(:,1),3)>15
-        tracesEvents.position(:,1) = tracesEvents.position(:,1) -tracesEvents.ceroXY(1)*tracesEvents.pixel_scale;
-        tracesEvents.position(:,2) = tracesEvents.position(:,2) --tracesEvents.ceroXY(2)*tracesEvents.pixel_scale;
-    end
-end
 art_idx = (1:length(tracesEvents.velocity));
 art_idx = art_idx(tracesEvents.velocity>100);
 og_length = length(tracesEvents.velocity);
 if ~isempty(art_idx)
     fields = fieldnames(tracesEvents);
     for field = 1:size(fields,1)
-         if length(tracesEvents.(fields{field,1}))== og_length
+         if size(tracesEvents.(fields{field,1}),1) == og_length
             tracesEvents.(fields{field,1})(art_idx,:) = [];
          end
     end
 end
 art_idx = (1:length(tracesEvents.velocity));
 art_idx = art_idx(any(tracesEvents.position(:,1)<0, 2));
-og_length = length(tracesEvents.velocity);
+og_length = size(tracesEvents.velocity,1);
 if ~isempty(art_idx)
     fields = fieldnames(tracesEvents);
     for field = 1:size(fields,1)
-         if length(tracesEvents.(fields{field,1}))== og_length
+         if size(tracesEvents.(fields{field,1}),1)== og_length
             tracesEvents.(fields{field,1})(art_idx,:) = [];
          end
     end
 end
-
-leftLim = mean(leftLim.Position(:,1))-tracesEvents.ceroXY(1);
-rightLim = mean(rightLim.Position(:,1))-tracesEvents.ceroXY(1);
+figure(fh1)
+if sum(contains(fieldnames(tracesEvents), 'ceroxy', 'IgnoreCase',true))==0
+    tracesEvents.ceroXY = min(tracesEvents.position,[],1);
+    tracesEvents.position(:,1) = tracesEvents.position(:,1) -tracesEvents.ceroXY(1);
+    tracesEvents.position(:,2) = tracesEvents.position(:,2) -tracesEvents.ceroXY(2);
+end
+leftLim = 6;
+rightLim = 66;
+%{
+leftLim = mean(leftLim.Position(:,1));
+rightLim = mean(rightLim.Position(:,1));
 if sum(contains(fieldnames(tracesEvents), 'scale', 'IgnoreCase',true))==1
     leftLim = leftLim*tracesEvents.pixel_scale;
     rightLim = rightLim*tracesEvents.pixel_scale;
 end
+leftLim = leftLim-tracesEvents.ceroXY(1);
+rightLim = rightLim-tracesEvents.ceroXY(1);
+%}
 ax2 = subplot(4,1,4);
 plot(tracesEvents.position(:,1), tracesEvents.position(:,2));
 hold on;
 plot([leftLim, leftLim], [min(tracesEvents.position(:,2)), max(tracesEvents.position(:,2))], 'm');
 plot([rightLim, rightLim], [min(tracesEvents.position(:,2)), max(tracesEvents.position(:,2))], 'm');
 pbaspect(ax2,[5 1 1])
-%tracesEvents.position(:,1) = tracesEvents.position(:,1) - min(tracesEvents.position(:,1));
-%tracesEvents.position(:,2) = tracesEvents.position(:,2) - min(tracesEvents.position(:,2));
+tracesEvents.sideLim = [leftLim, rightLim];
+%%
 save(data_file, "tracesEvents");
 
 %% separate trials 
@@ -93,13 +94,15 @@ end
 %% Visualize arrivals and departures
 %{
 figure
+frame_position = (tracesEvents.position+tracesEvents.ceroXY)./tracesEvents.pixel_scale;
 imshow(tracesEvents.frame)
 hold on;
-plot(tracesEvents.position(:,1)+ tracesEvents.ceroXY(1), tracesEvents.position(:,2)+tracesEvents.ceroXY(2),'Color', [.5,.5,.5], 'LineWidth', 2);
-plot([leftLim+tracesEvents.ceroXY(1), leftLim+tracesEvents.ceroXY(1)], ...
-    [min(tracesEvents.position(:,2))+tracesEvents.ceroXY(2), max(tracesEvents.position(:,2))+tracesEvents.ceroXY(2)], 'm');
-plot([rightLim+tracesEvents.ceroXY(1), rightLim+tracesEvents.ceroXY(1)],...
-    [min(tracesEvents.position(:,2))+tracesEvents.ceroXY(2), max(tracesEvents.position(:,2))+tracesEvents.ceroXY(2)], 'm');
+plot(frame_position(:,1), frame_position(:,2),'Color', [.5,.5,.5], 'LineWidth', 2);
+
+plot(([leftLim, leftLim]+ tracesEvents.ceroXY(1))./tracesEvents.pixel_scale ,...
+            [min(frame_position(:,2)), max(frame_position(:,2))], 'm');
+plot(([rightLim, rightLim]+ tracesEvents.ceroXY(1))./tracesEvents.pixel_scale ,...
+            [min(frame_position(:,2)), max(frame_position(:,2))], 'm');
 xlim manual
 
 for ii = 1:1:length(tracesEvents.position)
@@ -122,7 +125,7 @@ for ii = 1:1:length(tracesEvents.position)
         tstring = int2str(ii);
         tpause = 0.05;
     end
-    hplot = scatter(tracesEvents.position(ii,1)+tracesEvents.ceroXY(1), tracesEvents.position(ii,2)+tracesEvents.ceroXY(2),color, 'filled');
+    hplot = scatter(frame_position(ii,1), frame_position(ii,2),color, 'filled');
     title(tstring)
     pause(tpause)
     delete(hplot)
@@ -148,6 +151,8 @@ while stp == 0
         leftArrival(leftArrival==closerArrivalL) = [];
     else
         visit = visit+1;
+
+
     end
     if visit>length(leftDep); stp = 1; end
 end
@@ -495,11 +500,10 @@ set(gca,'FontSize',20)
 set(gca,'TickDir','out')
 linkaxes([ax1,ax2],'x');
 
-
 %% create trial structure
 for ii = 1:size(cState_exp,1)-1
     trial_data(ii).mouse = tracesEvents.mouse;
-    trial_data(ii).date = date;
+    trial_data(ii).date = datetime;
     trial_data(ii).task = 'Linear-Track';
     trial_data(ii).session =  tracesEvents.session;
 
@@ -522,34 +526,26 @@ for ii = 1:size(cState_exp,1)-1
     else
         trial_data(ii).dir = 'N';
     end
-   
     trial_data(ii).Fs =tracesEvents.sF;
     trial_data(ii).bin_size = 1/trial_data(ii).Fs;
     trial_data(ii).idx_trial_start = cState_exp(ii,1);
     [~ , trial_data(ii).idx_peak_speed] = max(tracesEvents.velocity(cState_exp(ii,1):cState_exp(ii,2)));
     trial_data(ii).idx_trial_end = cState_exp(ii,2);
-    %trial_data(ii).reward = cState_exp(ii,3);
     trial_data(ii).pos = tracesEvents.position(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).vel = tracesEvents.velocity(cState_exp(ii,1):cState_exp(ii,2),:);
-    %%{
-    trial_data(ii).Inscopix_traces = tracesEvents.traces(cState_exp(ii,1):cState_exp(ii,2),:);
+    trial_data(ii).raw_traces = tracesEvents.raw_traces(cState_exp(ii,1):cState_exp(ii,2),:);
+    trial_data(ii).denoised_traces = tracesEvents.denoised_traces(cState_exp(ii,1):cState_exp(ii,2),:);
+
     fields = fieldnames(tracesEvents);
     spike_fields = fields(contains(fields,'spikes_'));
     for idx = 1:length(spike_fields)
         eval(strcat('trial_data(ii).',spike_fields{idx},' = tracesEvents.', spike_fields{idx}, '(cState_exp(ii,1):cState_exp(ii,2),:);'))
     end
-    %{
-    trial_data(ii).deconvProb = tracesEvents.deconvProb(cState_exp(ii,1):cState_exp(ii,2),:);
-    trial_data(ii).ML_spikes = tracesEvents.ML_spikes(cState_exp(ii,1):cState_exp(ii,2),:);
-    %}
-    %{
-    trial_data(ii).rawProb = tracesEvents.rawProb(cState_exp(ii,1):cState_exp(ii,2),:);
-    trial_data(ii).rawTraces = tracesEvents.rawTraces(cState_exp(ii,1):cState_exp(ii,2),:);
-    trial_data(ii).deconvProb = tracesEvents.spikeDeconvTrace(cState_exp(ii,1):cState_exp(ii,2),:);
-
-    trial_data(ii).ML_spikes = tracesEvents.spikeML(cState_exp(ii,1):cState_exp(ii,2),:);
-    %}
-    trial_data(ii).cell_idx = 1:size(tracesEvents.traces,2);
+    event_fields = fields(contains(fields,'events_'));
+    for idx = 1:length(event_fields)
+        eval(strcat('trial_data(ii).',event_fields{idx},' = tracesEvents.', event_fields{idx}, '(cState_exp(ii,1):cState_exp(ii,2),:);'))
+    end
+    trial_data(ii).cell_idx = 1:size(tracesEvents.denoised_traces,2);
 end
 count = 1;
 while count<=size(trial_data,2)
