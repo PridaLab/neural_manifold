@@ -5,13 +5,16 @@ Created on Fri Mar 18 10:49:34 2022
 
 @author: julio
 """
-#VALIDATION OF EMBEDDING. Adapted from UMAP.validation 
-
+#VALIDATION OF EMBEDDING. Lightly adapted from UMAP.validation 
+#see Venna, Jarkko, and Samuel Kaski.
+#"Local multidimensional scaling with controlled tradeoff between 
+#trustworthiness and continuity." Proceedings of 5th Workshop on 
+#Self-Organizing Maps. 2005. and https://pubmed.ncbi.nlm.nih.gov/16787737/
 
 import numpy as np
 import numba
 from sklearn.neighbors import KDTree
-from umap.distances import named_distances
+#from umap.distances import named_distances
 
 
 @numba.njit(fastmath=True)
@@ -28,7 +31,7 @@ def euclidean(x, y):
 
 
 @numba.njit()
-def trustworthiness_vector_bulk(indices_source, indices_embedded, max_k):  # pragma: no cover
+def trustworthiness_vector_bulk(indices_source, indices_embedded, max_k):
 
     n_samples = indices_embedded.shape[0]
     trustworthiness = np.zeros(max_k + 1, dtype=np.float64)
@@ -52,7 +55,7 @@ def trustworthiness_vector_bulk(indices_source, indices_embedded, max_k):  # pra
     return trustworthiness
 
 @numba.njit()
-def continuity_vector_bulk(indices_source, indices_embedded, max_k):  # pragma: no cover
+def continuity_vector_bulk(indices_source, indices_embedded, max_k): 
 
     n_samples = indices_source.shape[0]
     continuity = np.zeros(max_k + 1, dtype=np.float64)
@@ -89,22 +92,22 @@ def compute_rank_indices(signal):
     for row in range(indices_signal.shape[0]):
         indices_signal[row] = np.argsort(dist_vector[row])
         
-    return indices_signal
+    return indices_signal 
 
 
-def trustworthiness_vector(source, embedding, max_k, metric="euclidean", indices_source = None):  # pragma: no cover
+def trustworthiness_vector(source, embedding, max_k, metric="euclidean", indices_source = None):
     tree = KDTree(embedding, metric=metric)
     indices_embedded = tree.query(embedding, k=max_k+1, return_distance=False)
     # Drop the actual point itself
     indices_embedded = indices_embedded[:, 1:]
     if isinstance(indices_source, type(None)):
-        dist = named_distances[metric]
-        indices_source = compute_rank_indices(source, dist)
+        #dist = named_distances[metric]
+        indices_source = compute_rank_indices(source)
     result = trustworthiness_vector_bulk(indices_source, indices_embedded, max_k)
     
     return result
 
-def continuity_vector(source, embedding, max_k, metric = "euclidean", indices_embedded = None):  # pragma: no cover
+def continuity_vector(source, embedding, max_k, metric = "euclidean", indices_embedded = None): 
     tree = KDTree(source, metric=metric)
     indices_source = tree.query(source, k=max_k+1, return_distance=False)
     # Drop the actual point itself
