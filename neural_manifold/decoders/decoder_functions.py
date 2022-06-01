@@ -371,7 +371,6 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
             points_A = input_A[np.logical_and(label_A >= centEdges[c,0], label_A<centEdges[c,1]),:]
             centLabel_A[c,:] = np.median(points_A, axis=0)
             
-            
             points_B = input_B[np.logical_and(label_B >= centEdges[c,0], label_B<centEdges[c,1]),:]
             centLabel_B[c,:] = np.median(points_B, axis=0)
     else:
