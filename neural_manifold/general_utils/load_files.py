@@ -54,7 +54,7 @@ def load_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
     if verbose:
         print('')
     if len(data_dict)==1:
-        data_dict = data_dict[name_dict]
+        data_dict = data_dict[list(data_dict.keys())[0]]
     return data_dict
 
 
