@@ -15,7 +15,6 @@ from sklearn.manifold import Isomap
 from scipy.stats import pearsonr
 
 import umap
-#from umap import validation
 from kneed import KneeLocator
 import random
 
