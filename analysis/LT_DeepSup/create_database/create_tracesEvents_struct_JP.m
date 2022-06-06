@@ -43,7 +43,7 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
     end
     if length(session_names)>1
         %pipeline of analysis in case of LT_ROT (registration)
-        if contains(session_type, 'LT_ROT', 'IgnoreCase',true)
+        if 1==1
             %get guide for first and second session files
             files_LT = files(contains({files(:).name}, session_names{1}, 'IgnoreCase',true));
             files_ROT = files(contains({files(:).name}, session_names{2}, 'IgnoreCase',true));
