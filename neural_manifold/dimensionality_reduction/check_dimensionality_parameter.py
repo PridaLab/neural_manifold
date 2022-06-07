@@ -124,7 +124,7 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	return R2s_kernel, sI_kernel, dim_kernel
 
 
-def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, **kwargs):
+def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, **kwargs):
 
 	if 'nn_list' in kwargs:
 		nn_list = kwargs['nn_list']
@@ -137,7 +137,13 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, *
 	else:
 		sI_nn_list = [3, 10, 20, 50, 100, 200]
 		kwargs['sI_nn_list'] = sI_nn_list
-
+    
+	if 'dim' in kwargs:
+		dim = kwargs['dim']
+	else:
+		dim = 3
+		kwargs['dim'] = 3
+        
 	if 'verbose' in kwargs:
 		verbose = kwargs['verbose']
 	else:
@@ -183,7 +189,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, *
 			print(f"Neighbours: {nn_val} ({nn_idx+1}/{len(nn_list)})")
 
 		#1. Project data
-		model = umap.UMAP(n_neighbors = nn_val, n_components =3, min_dist=0.75)
+		model = umap.UMAP(n_neighbors = nn_val, n_components =dim, min_dist=0.75)
 		if verbose:
 			print("\tFitting model...", sep= '', end = '')
 		concat_emb = model.fit_transform(concat_signal)
@@ -219,23 +225,29 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, *
 		#3. Align and compute rotation-angle
 		if verbose:
 			print("\n\tAligning manifolds...", sep= '', end = '')
-		TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0],ndims = 2, nCentroids = 10)
-		_,_,Z = get_angle_from_rot(RAB)
-		angle_nn[nn_idx, 0] = Z 
+		#TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0],ndims = 2, nCentroids = 10)
+		#_,_,Z = get_angle_from_rot(RAB)
+		#angle_nn[nn_idx, 0] = Z 
 
-		TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0],ndims = 3, nCentroids = 10)
+		TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0], ndims = dim, nCentroids = 10)
 		X,Y,Z = get_angle_from_rot(RAB)
-		angle_nn[nn_idx, 1] = X
-		angle_nn[nn_idx, 2] = Y
-		angle_nn[nn_idx, 3] = Z
-
+		angle_nn[nn_idx, 0] = X
+		angle_nn[nn_idx, 1] = Y
+		angle_nn[nn_idx, 2] = Z
+        
+		tr = (np.trace(RAB)-1)/2
+		if abs(tr)>1:
+			tr = round(tr,2)
+			if abs(tr)>1:
+				tr = np.nan
+		angle_nn[nn_idx, 3] = math.acos(tr)*180/np.pi
 		if verbose:
-			print("Done")
+			print(f"\b\b\b: {angle_nn[nn_idx, 3]:.2f}º - Done")
 		fig= plt.figure(figsize = (12, 3))
 
 		ax = plt.subplot(1,4,1, projection='3d')
-		p = ax.scatter(*emb_p.T, c=dir_mat_p[:,0])
-		ax.set_title('NN: ' + str(nn_val))
+		ax.scatter(*emb_p[:,:3].T, c=dir_mat_p[:,0])
+		ax.set_title('num neigh: ' + str(nn_val))
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
@@ -243,20 +255,20 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, *
 		ax = plt.subplot(1,4,2, projection='3d')
 		ax.set_title(f"SI pre:{np.mean(sI_nn[nn_idx, 0, :]):2f}")
 
-		p = ax.scatter(*emb_p.T, c=pos_p[:,0], cmap = plt.cm.magma)
+		ax.scatter(*emb_p[:,:3].T, c=pos_p[:,0], cmap = plt.cm.magma)
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
 
 		ax = plt.subplot(1,4,3, projection='3d')
-		p = ax.scatter(*emb_r.T, c=dir_mat_r[:,0])
-		ax.set_title(f"2D angle: {angle_nn[nn_idx, 0]:.2f}")
+		ax.scatter(*emb_r[:,:3].T, c=dir_mat_r[:,0])
+		ax.set_title(f"Rot angle: {angle_nn[nn_idx, 3]:.2f}")
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
 
 		ax = plt.subplot(1,4,4, projection='3d')
-		p = ax.scatter(*emb_r.T, c=pos_r[:,0], cmap = plt.cm.magma)
+		ax.scatter(*emb_r[:,:3].T, c=pos_r[:,0], cmap = plt.cm.magma)
 		ax.set_title(f"SI pos:{np.mean(sI_nn[nn_idx, 1, :]):2f}")
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
@@ -275,7 +287,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field,save_dir, *
 
 
 def get_angle_from_rot(R21):
-	if R21.shape[0]==3:
+	if R21.shape[0]>=3:
 		X = math.atan2(R21[2,1], R21[2,2])*180/np.pi 
 		Y = math.atan2(-R21[2,0], np.sqrt(R21[2,1]**2+R21[2,2]**2))*180/np.pi
 		Z = math.atan2(R21[1,0], R21[0,0])*180/np.pi
