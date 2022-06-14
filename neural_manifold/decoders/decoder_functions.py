@@ -397,7 +397,12 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
             points_B_right = input_B_right[np.logical_and(label_B_right >= centEdges[c,0], label_B_right<centEdges[c,1]),:]
             centLabel_B[2*c+1,:] = np.median(points_B_right, axis=0)
             
+    del_cent = np.all(np.isnan(centLabel_A), axis= 1)+ np.all(np.isnan(centLabel_B), axis= 1)
+    centLabel_A = np.delete(centLabel_A, del_cent, 0)
+    centLabel_B = np.delete(centLabel_B, del_cent, 0)
+
     TAB,RAB = get_point_registration(centLabel_A, centLabel_B)
+
     return TAB, RAB
 
 
@@ -407,21 +412,25 @@ def get_point_registration(p1, p2, verbose=False):
         p1 = p1.transpose()
         p2 = p2.transpose()
     #Calculate centroids
-    p1_c = np.mean(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
-    p2_c = np.mean(p2, axis = 1).reshape((-1,1))
+    p1_c = np.nanmean(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
+    p2_c = np.nanmean(p2, axis = 1).reshape((-1,1))
     #Subtract centroids
     q1 = p1-p1_c
     q2 = p2-p2_c
     #Calculate covariance matrix
     H=np.matmul(q1,q2.transpose())
     #Calculate singular value decomposition (SVD)
-    U, X, V_t = np.linalg.svd(H) #the SVD of linalg gives you Vt
-    #Calculate rotation matrix
-    R = np.matmul(V_t.transpose(),U.transpose())
-    if not np.allclose(np.linalg.det(R), 1.0) and verbose:
-        print("Rotation matrix of N-point registration not 1, see paper Arun et al.")
-    #Calculate translation matrix
-    T = p2_c - np.matmul(R,p1_c)
+    try:
+        U, X, V_t = np.linalg.svd(H) #the SVD of linalg gives you Vt
+        #Calculate rotation matrix
+        R = np.matmul(V_t.transpose(),U.transpose())
+        if not np.allclose(np.linalg.det(R), 1.0) and verbose:
+            print("Rotation matrix of N-point registration not 1, see paper Arun et al.")
+        #Calculate translation matrix
+        T = p2_c - np.matmul(R,p1_c)
+    except:
+        R = np.zeros((p1.shape[0], p1.shape[0]))*np.nan
+        T = np.zeros((p1.shape[0], 1))
     return T,R
 
 def cross_session_decoders_LT_dict(dict_df_A, dict_df_B, x_base = "ML_rates", label_signal = "posx", n_dims = 3, n_splits=10, 
