@@ -6,8 +6,9 @@ Created on Wed Feb 16 10:58:00 2022
 """
 import pandas as pd
 import numpy as np
-import copy
-import warnings
+import os, copy, pickle, warnings, random
+from datetime import datetime
+
 from sklearn.metrics import pairwise_distances
 from scipy.stats import linregress
 
@@ -16,7 +17,6 @@ from scipy.stats import pearsonr
 
 import umap
 from kneed import KneeLocator
-import random
 
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu #translators (from Dataframe to np.ndarray)
@@ -240,9 +240,6 @@ def compute_umap_continuity_dim(base_signal = None, n_neigh= 0.01, max_dim=10, m
     #check if user wants the different embedings backs
     if return_emb:
         return_emb_list = list()
-    #compute ranking order of source base_signal
-    if verbose:
-        print('Computing ranking order of base_signal')
     #initialize variables 
     num_cont = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
@@ -416,131 +413,248 @@ def compute_isomap_recerror_dim(base_signal = None, n_neigh= 0.01, max_dim=10, r
         return dim, rec_error
 
 
-def dim_to_number_cells(input_signal, field_signal = None, n_neigh = 0.01, n_steps = 15, input_label=None, 
-                            min_cells = 5, n_splits = 5, verbose = True, input_trial = None, cells_to_include = 'all'):
-    #check signal input
-    if isinstance(input_signal, pd.DataFrame):
-        signal = gu.dataframe_to_1array_translator(input_signal,field_signal)
-    elif isinstance(input_signal,np.ndarray):
-        signal = copy.deepcopy(input_signal)
-    else:
-        raise ValueError("Input object has to be a dataframe or a numpy array.")
-    #check label list input
-    if isinstance(input_label, np.ndarray): #user inputs an independent array for sI
-            label_list = list([copy.deepcopy(input_label)])
-    elif isinstance(input_label, str): #user specifies field_signal
-        label_list = list([gu.dataframe_to_1array_translator(input_signal,input_label)])
-    elif isinstance(input_label, list):
-        if isinstance(input_label[0], str):
-            label_list = gu.dataframe_to_manyarray_translator(input_signal,input_label)
-        elif isinstance(input_label[0], np.ndarray):
-            label_list = copy.deepcopy(input_label)
-        else:
-            raise ValueError("If 'input_label' is a list, it must be composed of either strings " +
-                             "(referring to the columns of the input_signal dataframe), or arrays. " +
-                             "However it was %s" %type(input_label[0]))
-    else:
-        raise ValueError(" 'input_label' must be either an array or a string (referring to the columns "+
-                         "of the input_signal dataframe) (or a list composed of those). However it was %s"
-                         %type(input_label))
-    #Check if trial mat to use when spliting training/test for decoders
-    if isinstance(input_trial, np.ndarray): #user inputs an independent array for sI
-        trial_signal = copy.deepcopy(input_trial)
-    elif isinstance(input_trial, str): #user specifies field_signal for sI but not a dataframe (then use input_signal)
-        trial_signal = gu.dataframe_to_1array_translator(input_signal,input_trial)
-    else:
-        trial_signal = None 
-    #Check if specific cells to include
-    if isinstance(cells_to_include,str):
-        if 'all' in cells_to_include:
-            cells_to_include = np.arange(0, signal.shape[1],1)
-    elif isinstance(cells_to_include, type(None)):
-            cells_to_include = np.arange(0, signal.shape[1],1)
-    #check number of neigh
-    if n_neigh<1:
-        if verbose:
-           print("'n_neigh' argument smaller than 1 (%.4f). Interpreting them as fraction of total number of samples." %(n_neigh), end='')
-        n_neigh = np.round(signal.shape[0]*n_neigh).astype(np.uint32)
-        if verbose:
-            print("Resulting in %i neighbours." %(n_neigh))
-    #get total number of cells
-    tnum_cells = len(cells_to_include)
-    #get array with number of cells to include on each iteration
-    num_cells = np.unique(np.logspace(np.log10(min_cells), np.log10(tnum_cells),n_steps,dtype=int))
-    #initilize dictionary where all results will be saved
-    dim_dict = dict()
-    dim_dict["num_cells"] = num_cells
-    dim_dict["cells_picked"] = dict()
-    dim_dict['inner_dim'] = np.zeros((n_steps,n_splits))
-    dim_dict['inner_dim_radii_vs_nn'] = np.zeros((n_steps, 1000,2, n_splits))*np.nan
-    dim_dict['num_trust'] = np.zeros((n_steps,2,n_splits))
-    dim_dict['res_var'] = np.zeros((n_steps,2,n_splits))
-    dim_dict['rec_error'] = np.zeros((n_steps,2,n_splits))
-    dim_dict['n_neigh'] = n_neigh
-
-    if label_list:
-        #define limit of variables used in sI if applicable
-        varLimits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
-        dim_dict['sI_val'] = np.zeros((n_steps,len(label_list),n_splits))
-        dim_dict["R2s"] = dict()
+@gu.check_inputs_for_pd
+def compute_umap_sI_dim(base_signal = None, label_signal = None, n_neigh= 0.01, max_dim=10, min_dist = 0.75, return_emb = False, verbose = False):
+    '''Compute dimensionality of data array according to Structure Index in UMAP
+    
+    Parameters:
+    -----------
+        base_signal (numpy Array): array containing the signal one wants to project using UMAP 
+                        to estimate dimensionality.
+        label_signal (numpy Array): array containing the label one wants to compute the structure
         
-    if verbose:
-        print('Checking number of cells idx X/X',end='', sep='')
-        pre_del = '\b\b\b'
-    for num_cells_idx, num_cells_val in enumerate(num_cells):
+    Optional parameters:
+    -------------------
+        n_neigh (float): number of neighbours used to compute UMAP projection.
+        
+        max_dim (int): maximum number of dimensions to check (note this parameters is the main time-expensive)
+        
+        min_dist (float): minimum distance used to compute UMAP projection (values in (0,1]))
+    
+        return_emb (boolean): boolean specifing whether or not to return all UMAP embeddings computed.
+        
+        verbose (boolean): boolean indicating whether to pring verbose or not.
+                           
+    Returns:
+    --------
+        dim (int): dimensionality of the data according to UMAP trustworthiness.
+        
+        sI_val (array): array containing the structure index values of each dimensionality iteration. This
+                        array is the one used to find the knee defining the dimensionality of the data
+                        
+        return_emb_list (list): list containing the UMAP projections computed for each of the dimensionalities.
+                        (only applicable if input parameter 'return_emb' set to True)
+    '''
+    #Check consistency of maximum dimensionality
+    if max_dim>base_signal.shape[1]:
         if verbose:
-            print(pre_del,"%d/%d" %(num_cells_idx+1, n_steps), sep = '', end='')
-            pre_del = (len(str(num_cells_idx+1))+len(str(n_steps))+1)*'\b'
-            
-        dim_dict['cells_picked'][str(num_cells_idx)] = np.zeros((num_cells_val,n_splits)).astype(int)
-        for split_idx in range(n_splits):
-            cells_picked = random.sample(list(cells_to_include), num_cells_val)
-            dim_dict['cells_picked'][str(num_cells_idx)][:,split_idx] = cells_picked
-            signal_new = copy.deepcopy(signal[:, cells_picked])
-            #1.CHECK INNER DIM
-            m , radius, neigh = compute_inner_dim(signal_new)
-            dim_dict['inner_dim'][num_cells_idx, split_idx] = m
-            dim_dict['inner_dim_radii_vs_nn'][num_cells_idx, :radius.shape[0],:,split_idx] = np.hstack((radius, neigh))
-            
-            #2.CHECK UMAP DIM TRUSTWORTHINESS
-            dim, num_trust = compute_umap_trust_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
-            dim_dict['num_trust'][num_cells_idx,0,split_idx] = dim
-            if not np.isnan(dim):
-                dim_dict['num_trust'][num_cells_idx,1,split_idx] = num_trust[dim-1,0]
-            else:
-                dim_dict['num_trust'][num_cells_idx,1,split_idx] = np.nan
-            
-            #3.CHECK ISOMAP RESVAR DIM
-            dim, res_var = compute_isomap_resvar_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
-            dim_dict['res_var'][num_cells_idx,0,split_idx] = dim
-            if not np.isnan(dim):
-                dim_dict[num_cells_idx,1,split_idx] = res_var[dim-1,0]
-            else:
-                dim_dict[num_cells_idx,1,split_idx] = np.nan
+            print("Maximum number of dimensions (%i) larger than original number of " %(max_dim)+
+                          "dimensions (%i). Setting the first to the later." %(base_signal.shape[1]))
+        max_dim = base_signal.shape[1]
+    #check label_signal
+    if label_signal.ndim>1:
+        label_signal = label_signal[:,0]
+    n_bins = len(np.unique(label_signal))
+    if n_bins > 20:
+        n_bins = 10
+    min_val = np.percentile(label_signal,5)
+    max_val = np.percentile(label_signal,95)
+    
+    #Check number of neighbours
+    if n_neigh<1:
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
+        if verbose:
+            print("'n_neigh' argument smaller than 1 (%.4f). Interpreting it as fraction of number of samples." %(n_neigh), end='')
+            print("Resulting in %i neighbours." %(n_neigh))
+    #check if user wants the different embedings backs
+    if return_emb:
+        return_emb_list = list()
+    
+    #initialize variables 
+    sI_val = np.zeros((max_dim,1))*np.nan
+    for dim in range(1, max_dim+1):
+        if verbose:
+            print('Checking dimension %i ' %(dim), sep='', end = '')
+        emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(base_signal)
+        emb_space = np.arange(dim).astype(int)
+        sI_val[dim-1,0],_,_ = sI.compute_structure_index(emb ,label_signal, n_bins, emb_space, 0,
+                                                         vmin = min_val, vmax = max_val, nn = n_neigh)[-1]
+        if return_emb:
+            return_emb_list.append(emb)
+        if dim>1:
+            sI_improvement = sI_val[dim-1,0]-sI_val[dim-2,0]
+            if verbose:
+                print(f': sI improvement of {sI_improvement:.4f}', sep='')
+        else:
+            if verbose:
+                print('')
+                
+    dim_space = np.linspace(1,max_dim, max_dim).astype(int)        
+    kl = KneeLocator(dim_space, sI_val[:,0], curve = "concave", direction = "increasing")
+    if kl.knee:
+        dim = kl.knee
+        if verbose:
+            print(f'Final dimension: {dim} - Final sI of {sI_val[dim-1,0]:.4f}')
+    else:
+        dim = np.nan
+        if verbose:
+            print('Could estimate final dimension (knee not found). Returning nan.')
+    if return_emb:
+        return dim, sI_val, return_emb_list
+    else:
+        return dim, sI_val
 
-            #4.CHECK ISOMAP REC ERROR DIM
-            dim, rec_error = compute_isomap_recerror_dim(signal_new, n_neigh = n_neigh, max_dim = 8,verbose=False)
-            dim_dict['rec_error'][num_cells_idx,0,split_idx] = dim
-            if not np.isnan(dim):
-                dim_dict['rec_error'][num_cells_idx,1,split_idx] = rec_error[dim-1,0]
-            else:
-                dim_dict['rec_error'][num_cells_idx,1,split_idx] = np.nan
+@gu.check_inputs_for_pd    
+def dim_to_number_cells(base_signal=None, label_signal=None, input_trial = None, **kwargs):
+    
+    if 'verbose' in kwargs:
+        verbose = kwargs['verbose']
+    else:
+        verbose = True
+        kwargs['verbose'] = verbose
+
+    if 'min_cells' in kwargs:
+        min_cells = kwargs['min_cells']
+    else:
+        min_cells = 5
+        kwargs['min_cells'] = min_cells
+
+    if 'max_cells' in kwargs:
+        min_cells = kwargs['max_cells']
+    else:
+        max_cells = 200
+        kwargs['max_cells'] = max_cells
+
+    if 'n_steps' in kwargs:
+        n_steps = kwargs['n_steps']
+    else:
+        n_steps = 15
+        kwargs['n_steps'] = n_steps
+
+    if 'n_neigh' in kwargs:
+        n_neigh = kwargs['n_neigh']
+    else:
+        n_neigh = 60
+        kwargs['n_neigh'] = n_neigh
+    if n_neigh<1:
+        n_neigh = np.round(base_signal.shape[0]*n_neigh).astype(np.uint32)
+        if verbose:
+            print(f"'n_neigh' argument smaller than 1 ({n_neigh:.4f}). Interpreting it as fraction of number of samples.", end='')
+            print(f" Resulting in {n_neigh} neighbours.")
+
+    if 'n_splits' in kwargs:
+        n_splits = kwargs['n_splits']
+    else:
+        n_splits = 5
+        kwargs['n_splits'] = n_splits
+
+    if 'max_dim' in kwargs:
+        max_dim = kwargs['max_dim']
+    else:
+        max_dim = 15
+        kwargs['max_dim'] = n_splits
+    
+    if 'save_dir' in kwargs:
+        save_dir = kwargs['save_dir']
+    else:
+        save_dir = os.getcwd()
+        kwargs['save_dir'] = save_dir
+
+    if 'save_name' in kwargs:
+        save_name = kwargs['save_name']
+    else:
+        save_name = 'dim_dict_'+ datetime.now().strftime('%d%m%y_%H%M%S')
+        kwargs['save_name'] = save_name
+
+    #check base_signal input
+    assert isinstance(base_signal, np.ndarray), "input 'base_signal' must be an array (or name of field if " + \
+                                            f"panda structure is provided), but it was a {type(base_signal)}"
+
+    #get cells_list containing the number of cells to be included on each iteration
+    num_cells = base_signal.shape[1]
+    cell_list = np.unique(np.logspace(np.log10(min_cells), np.log10(max_cells),n_steps,dtype=int))
+    cell_list = cell_list[cell_list<=num_cells]
+
+    dim_dict = dict()
+    dim_dict["cells_picked"] = np.zeros((n_steps,n_splits,num_cells)).astype(bool)
+    dim_dict["params"] = kwargs
+
+    dim_dict["inner_dim"] = np.zeros((n_steps, n_splits))
+    dim_dict["inner_dim_radii_vs_nn"] = np.zeros((n_steps, n_splits, 1000, 2))
+
+    dim_dict["trust_dim"] = np.zeros((n_steps, n_splits))
+    dim_dict["trust_dim_values"] = np.zeros((n_steps, n_splits, max_dim))
+
+    dim_dict["cont_dim"] = np.zeros((n_steps, n_splits))
+    dim_dict["cont_dim_values"] = np.zeros((n_steps, n_splits, max_dim))
+
+    dim_dict["cont_dim"] = np.zeros((n_steps, n_splits))
+    dim_dict["cont_dim_values"] = np.zeros((n_steps, n_splits, max_dim))
+
+    dim_dict["resvar_dim"] = np.zeros((n_steps,n_splits))
+    dim_dict["resvar_dim_values"] = np.zeros((n_steps, n_splits, max_dim))
+
+    dim_dict["recerr_dim"] = np.zeros((n_steps,n_splits))
+    dim_dict["recerr_dim_values"] = np.zeros((n_steps, n_splits, max_dim))
+
+    dim_dict["sI_dim"] = np.zeros((n_steps,n_splits, len(label_signal)))
+    dim_dict["sI_dim_values"] = np.zeros((n_steps, n_splits, len(label_signal), max_dim))
+
+    #Iterate over each one
+    for ncell_idx, ncell_val in enumerate(cell_list):
+        if verbose:
+            print(f"Checking number of cells: {ncell_val} ({ncell_idx+1}/{n_steps}):", end = '', sep = '')
+            print("\n\tIteration X/X", sep= '', end = '')
+            pre_del = '\b\b\b'
+
+        for split_idx in range(n_splits):
+            if verbose:
+                print(pre_del, f"{split_idx+1}/{n_splits}", sep = '', end = '')
+                pre_del = (len(str(split_idx+1))+len(str(n_splits))+1)*'\b'
+
+            cells_picked = random.sample(list(np.arange(num_cells).astype(int)), ncell_val)
+
+            dim_dict["cells_picked"][ncell_idx, split_idx, cells_picked] = True 
+            it_signal = copy.deepcopy(base_signal[:,cells_picked])
+
+            #1. Inner dim
+            m , radius, neigh = compute_inner_dim(it_signal)
+            dim_dict["inner_dim"][ncell_idx, split_idx] = m
+            dim_dict["inner_dim_radii_vs_nn"][ncell_idx, split_idx, :radius.shape[0],:] = np.hstack((radius, neigh))
+
+            #2. Umap trustworthiness
+            dim, num_trust = compute_umap_trust_dim(it_signal, n_neigh = n_neigh, max_dim = max_dim)
+            dim_dict["trust_dim"][ncell_idx, split_idx] = dim
+            dim_dict["trust_dim_values"][ncell_idx, split_idx,:len(num_trust)] = num_trust[:,0]
+
+            #3. Umap continuity
+            dim, num_cont = compute_umap_continuity_dim(it_signal, n_neigh = n_neigh, max_dim = max_dim)
+            dim_dict["cont_dim"][ncell_idx, split_idx] = dim
+            dim_dict["cont_dim_values"][ncell_idx, split_idx,:len(num_cont)] = num_cont[:,0]
             
-            #CHECK sI index in 3 dims
-            if label_list:
-                emb = umap.UMAP(n_neighbors = n_neigh, n_components = 3, min_dist=0.75).fit_transform(signal_new)
-                emb_space = np.linspace(0,3-1, 3).astype(int)              
-                for labels_idx, labels_values in enumerate(label_list):
-                    if labels_values.ndim>1:
-                        labels_values = labels_values[:,0]
-                    minVal, maxVal = varLimits[labels_idx]
-                    dim_dict['sI_val'][num_cells_idx, labels_idx, split_idx],_ , _ = sI.compute_structure_index(emb, 
-                                                                                      labels_values, 20, emb_space, 0,
-                                                                                      vmin= minVal, vmax = maxVal)
-            #Check decoding in 3 dims
-            if label_list:
-                dim_dict["R2s"][str(num_cells_idx)+'_'+str(split_idx)] = decoders_1D(signal_new, input_label=label_list, 
-                                      emb_list = ["umap"], input_trial = trial_signal, n_dims = 3, n_splits=5, 
-                                      decoder_list = ["wf", "wc", "xgb", "svr"], verbose = False)
-     
+            #4. Isomap res_var
+            dim, res_var = compute_isomap_resvar_dim(it_signal, n_neigh = n_neigh, max_dim = max_dim)
+            dim_dict["resvar_dim"][ncell_idx, split_idx] = dim
+            dim_dict["resvar_dim_values"][ncell_idx, split_idx,:len(res_var)] = res_var[:,0]
+
+            #5. Isomap rec_err
+            dim, rec_err = compute_isomap_recerror_dim(it_signal, n_neigh = n_neigh, max_dim = max_dim)
+            dim_dict["recerr_dim"][ncell_idx, split_idx] = dim
+            dim_dict["recerr_dim_values"][ncell_idx, split_idx,:len(rec_err)] = rec_err[:,0]
+
+
+            for label_idx in range(len(label_signal)):
+                #6. sI
+                dim ,sI_val = compute_umap_sI_dim(it_signal, label_signal[label_idx], n_neigh= n_neigh, max_dim=max_dim)
+                dim_dict["sI_dim"][ncell_idx, split_idx, label_idx] = dim
+                dim_dict["sI_dim_values"][ncell_idx, split_idx,label_idx, :] = sI_val[:,0]
+
+                #7. Decoder
+
+            if verbose:
+                print("")
+            save_dict = open(os.path.join(save_dir, save_name), "wb")
+            pickle.dump(dim_dict, save_dict)
+            save_dict.close()
+
     return dim_dict
