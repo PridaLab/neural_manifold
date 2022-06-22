@@ -327,7 +327,6 @@ function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condi
     end
     % Check position initial zeros
     if all(tracesEvents.position(1,:) == 0)
-        keyboard;
         double_fprintf(fileID,'\tRemoving zeros at the beggining of position...')
         initial_zeros = find(all(tracesEvents.position == 0, 2));
         double_fprintf(fileID,'\b\b\b: %i entries compromised',length(initial_zeros))

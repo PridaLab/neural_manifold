@@ -1,7 +1,7 @@
 %% RESTART
 close all; clear; clc;
 %% FILE
-data_file =  'CZ4_alo_events_s3.mat';
+data_file =  'GC3_alo_events_s3.mat';
 % Load file
 load(data_file);
 %% DEFINE MAZE SECTIONS
@@ -272,7 +272,7 @@ return_intervals = [[return_arms(1); return_arms(end_return+1)], ...
     %first see the direction of trial-0
 trial_0 = find(contains(pos_sec_name(1:return_intervals(1,1)-1), 'H'));
 if isempty(trial_0)
-    trial_0 = find(contains(pos_sec_name(1:return_intervals(2,1)-1), 'H'));
+    trial_0 = 1;
 end
 if contains(pos_sec_name{trial_0(1),1}, 'H3')
     last_dir = 'E';
