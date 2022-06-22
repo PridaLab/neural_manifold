@@ -12,7 +12,6 @@ def filter_noisy_outliers(data):
     return data
 
 
-
 def generate_graph_laplacian(data, nn):
     """Generate graph Laplacian from data."""
     # Adjacency Matrix.
@@ -78,7 +77,6 @@ def compute_pointCloudsOverlap(cloud1, cloud2, k):
     return overlap
 
 
-
 def compute_structure_index(emb, label, nBins, dimNames, plotCluster, overlapThreshold=0.5, **kwargs):
     #Preprocess data 
     #emb = emb[:,dimNames]
@@ -118,11 +116,12 @@ def compute_structure_index(emb, label, nBins, dimNames, plotCluster, overlapThr
         binLabel[np.logical_and(label >= binEdges[b,0], label<binEdges[b,1])] = 1 + int(np.max(binLabel))
     binLabel[np.logical_and(label >= binEdges[nBins-1,0], label<=binEdges[nBins-1,1])] = 1 + int(np.max(binLabel))
 
-    #Discard outlier clusters (nPoints < 1%)
+    #Discard outlier clusters (nPoints < 1%) || (nPoints < 2*nn)
     #Compute number of points in each cluster
     nPoints = np.array([np.sum(binLabel==value) for value in np.unique(binLabel)])
     #Get the clusters that meet criteria and delete them
-    delLabels = np.where(nPoints < label.size*1/100)[0]
+    del_th = np.max((2*nn, label.size*1/100))
+    delLabels = np.where(nPoints < del_th)[0]
     #Delete outlier clusters
     for delInd in delLabels:
         binLabel[binLabel==delInd+1] = 0
