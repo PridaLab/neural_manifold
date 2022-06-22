@@ -367,12 +367,17 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
     if isinstance(dir_A, type(None)) or isinstance(dir_B, type(None)):
         centLabel_A = np.zeros((nCentroids,ndims))
         centLabel_B = np.zeros((nCentroids,ndims))
+        
+        ncentLabel_A = np.zeros((nCentroids,))
+        ncentLabel_B = np.zeros((nCentroids,))
         for c in range(nCentroids):
             points_A = input_A[np.logical_and(label_A >= centEdges[c,0], label_A<centEdges[c,1]),:]
             centLabel_A[c,:] = np.median(points_A, axis=0)
+            ncentLabel_A[c] = points_A.shape[0]
             
             points_B = input_B[np.logical_and(label_B >= centEdges[c,0], label_B<centEdges[c,1]),:]
             centLabel_B[c,:] = np.median(points_B, axis=0)
+            ncentLabel_B[c] = points_B.shape[0]
     else:
         input_A_left = copy.deepcopy(input_A[dir_A[:,0]==1,:])
         label_A_left = copy.deepcopy(label_A[dir_A[:,0]==1])
@@ -386,18 +391,28 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
         
         centLabel_A = np.zeros((2*nCentroids,ndims))
         centLabel_B = np.zeros((2*nCentroids,ndims))
+        ncentLabel_A = np.zeros((2*nCentroids,))
+        ncentLabel_B = np.zeros((2*nCentroids,))
+        
         for c in range(nCentroids):
             points_A_left = input_A_left[np.logical_and(label_A_left >= centEdges[c,0], label_A_left<centEdges[c,1]),:]
             centLabel_A[2*c,:] = np.median(points_A_left, axis=0)
+            ncentLabel_A[2*c] = points_A_left.shape[0]
             points_A_right = input_A_right[np.logical_and(label_A_right >= centEdges[c,0], label_A_right<centEdges[c,1]),:]
             centLabel_A[2*c+1,:] = np.median(points_A_right, axis=0)
-            
+            ncentLabel_A[2*c+1] = points_A_right.shape[0]
+
             points_B_left = input_B_left[np.logical_and(label_B_left >= centEdges[c,0], label_B_left<centEdges[c,1]),:]
             centLabel_B[2*c,:] = np.median(points_B_left, axis=0)
+            ncentLabel_B[2*c] = points_B_left.shape[0]
             points_B_right = input_B_right[np.logical_and(label_B_right >= centEdges[c,0], label_B_right<centEdges[c,1]),:]
             centLabel_B[2*c+1,:] = np.median(points_B_right, axis=0)
-            
-    del_cent = np.all(np.isnan(centLabel_A), axis= 1)+ np.all(np.isnan(centLabel_B), axis= 1)
+            ncentLabel_B[2*c+1] = points_B_right.shape[0]
+
+    del_cent_nan = np.all(np.isnan(centLabel_A), axis= 1)+ np.all(np.isnan(centLabel_B), axis= 1)
+    del_cent_num = (ncentLabel_A<100) + (ncentLabel_B<100)
+    del_cent = del_cent_nan + del_cent_num
+    
     centLabel_A = np.delete(centLabel_A, del_cent, 0)
     centLabel_B = np.delete(centLabel_B, del_cent, 0)
 
