@@ -9,3 +9,6 @@ __pycache__/
 
 #Bin files
 bin/
+
+#Matlab temporal autosave files
+*.asv
