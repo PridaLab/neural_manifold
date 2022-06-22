@@ -19,6 +19,8 @@ from datetime import datetime
 import base64
 from io import BytesIO
 
+import seaborn as sns
+import pandas as pd
 #%%
 def plot_kernel_study(kernel_dict, save_dir):
     fnames = list(kernel_dict.keys())
@@ -273,3 +275,156 @@ for fname in fname_list:
     save_ks.close()
 
 _ = plot_kernel_study(GC3_kernel_study, save_dir)
+
+#%% DDC
+#load data
+file_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/DDC'
+DDC = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(DDC.keys())
+DDC_kernel_study = dict()
+for fname in fname_list:
+    pd_struct = copy.deepcopy(DDC[fname])
+    #compute hyperparameter study
+    DDC_R2s_kernel, DDC_sI_kernel, DDC_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    DDC_kernel_study[fname] = {
+        'R2s': DDC_R2s_kernel,
+        'sI': DDC_sI_kernel,
+        'inner_dim': DDC_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "DDC_kernel_study_dict.pkl"), "wb")
+    pickle.dump(DDC_kernel_study, save_ks)
+    save_ks.close()
+    
+_ = plot_kernel_study(DDC_kernel_study, save_dir)
+
+#%%
+save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/results/kernel_study'
+
+if "CZ3_kernel_study" not in locals():
+    CZ3_kernel_study = gu.load_files(save_dir, '*CZ3_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "CZ4_kernel_study" not in locals():
+    CZ4_kernel_study = gu.load_files(save_dir, '*CZ4_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "CZ6_kernel_study" not in locals():
+    CZ6_kernel_study = gu.load_files(save_dir, '*CZ6_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "GC2_kernel_study" not in locals():
+    GC2_kernel_study = gu.load_files(save_dir, '*GC2_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "GC3_kernel_study" not in locals():
+    GC3_kernel_study = gu.load_files(save_dir, '*GC3_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "DDC_kernel_study" not in locals():
+    DDC_kernel_study = gu.load_files(save_dir, '*DDC_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")  
+
+#%%
+
+#Get kernel with better decoding performance
+assymetry = 1
+
+R2s_sup = np.zeros((16,4,6))
+idim_sup = np.zeros((16,6))
+for s_idx, s_name in enumerate(CZ3_kernel_study.keys()):
+    pd_struct = CZ3_kernel_study[s_name]
+    R2s_sup[:,:,s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_sup[:,s_idx] = pd_struct["inner_dim"][:,assymetry]
+for s_idx, s_name in enumerate(CZ4_kernel_study.keys()):
+    pd_struct = CZ4_kernel_study[s_name]
+    R2s_sup[:,:,2+s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_sup[:,2+s_idx] = pd_struct["inner_dim"][:,assymetry]
+for s_idx, s_name in enumerate(CZ6_kernel_study.keys()):
+    pd_struct = CZ6_kernel_study[s_name]
+    R2s_sup[:,:,4+s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_sup[:,4+s_idx] = pd_struct["inner_dim"][:,assymetry]
+    
+    
+R2s_deep = np.zeros((16,4,6))
+idim_deep = np.zeros((16,6))
+for s_idx, s_name in enumerate(GC2_kernel_study.keys()):
+    pd_struct = GC2_kernel_study[s_name]
+    R2s_deep[:,:,s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_deep[:,s_idx] = pd_struct["inner_dim"][:,assymetry]
+for s_idx, s_name in enumerate(GC3_kernel_study.keys()):
+    pd_struct = GC3_kernel_study[s_name]
+    R2s_deep[:,:,2+s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_deep[:,2+s_idx] = pd_struct["inner_dim"][:,assymetry]
+for s_idx, s_name in enumerate(DDC_kernel_study.keys()):
+    pd_struct = DDC_kernel_study[s_name]
+    R2s_deep[:,:,4+s_idx] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim_deep[:,4+s_idx] = pd_struct["inner_dim"][:,assymetry]
+    
+    
+R2s_vmax = 25
+kernel_std = pd_struct["params"]["ks_list"]
+dec_name = ["wf", "wc", "xgb", "svm"]
+
+#%%
+
+plt.figure()
+for dec_idx in range(4):
+    if dec_idx <2:
+        plot_idx = dec_idx+1
+    else:
+        plot_idx = dec_idx - 1 + 3
+    ax = plt.subplot(2,3,plot_idx)
+    m = np.mean(R2s_sup[:,dec_idx,:], axis=1)
+    sd = np.std(R2s_sup[:,dec_idx,:], axis=1)/np.sqrt(R2s_sup.shape[2])
+    ax.plot(m, '--', c= 'b', label = 'Sup')
+    ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= 'b', alpha = 0.3)
+    
+    m = np.mean(R2s_deep[:,dec_idx,:], axis=1)
+    sd = np.std(R2s_deep[:,dec_idx,:], axis=1)/np.sqrt(R2s_sup.shape[2])
+    ax.plot(m, c= 'g', label = 'Deep')
+    ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= 'g', alpha = 0.3)
+    ax.set_xlabel('kernel (ms)', labelpad = -2)
+    ax.set_xticks(np.arange(len(m)), labels=kernel_std)
+    ax.set_ylim([0, R2s_vmax])
+    ax.set_yticks([0, R2s_vmax/2, R2s_vmax])
+    ax.set_ylabel('error xpos [cm]', labelpad = 5)
+    ax.set_title(dec_name[dec_idx])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+ax.legend()
+
+ax = plt.subplot(2,3,3)
+m = np.mean(idim_sup, axis=1)
+sd = np.std(idim_sup, axis=1)/np.sqrt(R2s_sup.shape[2])
+ax.plot(m, '--', c= 'b', label = 'Sup')
+ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= 'b', alpha = 0.3)
+
+m = np.mean(idim_deep, axis=1)
+sd = np.std(idim_deep, axis=1)/np.sqrt(R2s_sup.shape[2])
+ax.plot(m, c= 'g', label = 'Deep')
+ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= 'g', alpha = 0.3)
+ax.set_xlabel('kernel (ms)', labelpad = -2)
+ax.set_xticks(np.arange(len(m)), labels=kernel_std)
+ax.set_ylim([0, 4.5])
+ax.set_yticks([0,2,4])
+ax.set_ylabel('Inner Dim', labelpad = 5)
+ax.set_title(dec_name[dec_idx])
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+pd_inner_dim = pd.DataFrame(data={'Condition':['Sup', 'Sup', 'Sup','Sup', 'Sup', 'Sup', 
+                                                 'Deep', 'Deep','Deep', 'Deep','Deep', 'Deep'], 
+                                    'Session': ['Pre', 'Rot', 'Pre', 'Rot', 'Pre', 'Rot',
+                                                'Pre', 'Rot', 'Pre', 'Rot', 'Pre', 'Rot'],
+                                    'inner_dim':np.vstack((idim_sup[4,:].reshape(-1,1),idim_deep[4,:].reshape(-1,1))).T[0,:]})
+
+ax = plt.subplot(2,3,6)
+# creating boxplot
+b = sns.boxplot(x='Condition', y='inner_dim', data=pd_inner_dim,
+                palette='Set2', linewidth = 1, width= .5, ax= ax)
+# adding data points
+sns.stripplot(x='Condition', y='inner_dim', data=pd_inner_dim, ax= ax,
+              jitter = True, dodge = True, linewidth=1,palette ='Set2',edgecolor='gray')
+# display plot
+b.axes.set_title(f"Std: {int(1000*kernel_std[4])} ms",fontsize=16)
+b.set_xlabel(" ",fontsize=15)
+b.set_ylabel("Inner dim",fontsize=15)
+b.set_yticks([0, 1,2,3,4])
+b.spines['top'].set_visible(False)
+b.spines['right'].set_visible(False)
+b.tick_params(labelsize=12)
+#plt.tight_layout()
+plt.show()

@@ -15,6 +15,7 @@ import umap
 from neural_manifold import general_utils as gu
 from neural_manifold import structure_index as sI 
 
+from neural_manifold import decoders as dec 
 
 
 #%% Spikes study
@@ -22,6 +23,7 @@ signal_order = ['SNR0_1', 'SNR0_5','SNR1', 'SNR1_5', 'SNR2', 'SNR3', 'SNR5','tra
 signal_fields = ['rates_SNR0_1','rates_SNR0_5','rates_SNR1','rates_SNR1_5', 'rates_SNR2', 'rates_SNR3', 'rates_SNR5', 'Inscopix_traces']
 label_order = ['pos-x', 'pos-y']
 #model GC3 embeddings
+
 save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/Spikes_study/GC3'
 GC3_dict = gu.load_files(save_dir, '*_PyalData_struct.mat', verbose=False, struct_type = "PyalData")
 GC3_dict = gu.apply_to_dict(gu.add_firing_rates, GC3_dict, 'smooth', std=0.4, num_bins = 20, assymetry = True, continuous = True)
@@ -33,6 +35,7 @@ X_emb_dict = dict()
 X_base_dict = dict()
 label_signal_dict = dict()
 label_limits_dict = dict()
+
 for f_idx, fname in enumerate(fnames):
     print(fname)
     pos = copy.deepcopy(np.concatenate(GC3_dict[fname]["pos"].values, axis= 0))
@@ -40,94 +43,61 @@ for f_idx, fname in enumerate(fnames):
     pos_y = copy.deepcopy(pos[:,1]).reshape(-1,1)
     label_list = list([pos_x, pos_y])
     label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
-    
-    X_base = list()
-    for signal in signal_fields:
-        X_base.append(copy.deepcopy(np.concatenate(GC3_dict[fname][signal].values, axis=0)))
-    X_emb = list()
-    #n_perc = [0.01, 0.01,0.01,0.01, 0.1]
-    for base_idx, base in enumerate(X_base):
-        #n_neighbours = np.round(X_base[0].shape[0]*n_perc[base_idx]).astype(int)
-        n_neighbours = 50
-        model = umap.UMAP(n_neighbors = n_neighbours, n_components =3, min_dist=0.75)
-        X_emb.append(model.fit_transform(base))
-    
-    X_base_dict[fname] = X_base
-    X_emb_dict[fname] = X_emb
-    label_signal_dict[fname] = label_list
-    label_limits_dict[fname] = label_limits
-    
-#model GC1 embeddings
-save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/Spikes_study/GC1'
-GC1_dict = gu.load_files(save_dir, '*_PyalData_struct.mat', verbose=False, struct_type = "PyalData")
-GC1_dict = gu.apply_to_dict(gu.add_firing_rates, GC1_dict, 'smooth', std=0.4, num_bins = 20, assymetry = True, continuous = True)
-GC1_dict = gu.apply_to_dict(gu.select_trials, GC1_dict, "dir == ['L', 'R']")
-fnames = list(GC1_dict.keys())
-for f_idx, fname in enumerate(fnames):
-    print(fname)
-    pos = copy.deepcopy(np.concatenate(GC1_dict[fname]["pos"].values, axis= 0))
-    pos_x = copy.deepcopy(pos[:,0]).reshape(-1,1)
-    pos_y = copy.deepcopy(pos[:,1]).reshape(-1,1)
-    label_list = list([pos_x, pos_y])
-    label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
-    
-    X_base = list()
-    X_base.append(copy.deepcopy(np.concatenate(GC3_dict[fname]["Inscopix_SNR0_5_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(GC1_dict[fname]["Inscopix_SNR1_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(GC1_dict[fname]["Inscopix_SNR1_5_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(GC1_dict[fname]["Inscopix_SNR2_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(GC1_dict[fname]["Inscopix_SNR3_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(GC1_dict[fname]["Inscopix_traces"].values, axis=0)))
-    
-    X_emb = list()
-    #n_perc = [0.01, 0.01,0.01,0.01, 0.1]
-    for base_idx, base in enumerate(X_base):
-        #n_neighbours = np.round(X_base[0].shape[0]*n_perc[base_idx]).astype(int)
-        n_neighbours = 50
-        model = umap.UMAP(n_neighbors = n_neighbours, n_components =3, min_dist=0.75)
-        X_emb.append(model.fit_transform(base))
-    
-    X_base_dict[fname] = X_base
-    X_emb_dict[fname] = X_emb
     label_signal_dict[fname] = label_list
     label_limits_dict[fname] = label_limits
 
-#model CZ3 embeddings
-save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/Spikes_study/CZ3'
-CZ3_dict = gu.load_files(save_dir, '*_PyalData_struct.mat', verbose=False, struct_type = "PyalData")
-CZ3_dict = gu.apply_to_dict(gu.add_firing_rates, CZ3_dict, 'smooth', std=0.4, num_bins = 20, assymetry = True, continuous = True)
-CZ3_dict = gu.apply_to_dict(gu.select_trials, CZ3_dict, "dir == ['L', 'R']")
-fnames = list(CZ3_dict.keys())
+    X_base = list()
+    for signal in signal_fields:
+        X_base.append(copy.deepcopy(np.concatenate(GC3_dict[fname][signal].values, axis=0)))
+    X_base_dict[fname] = X_base
+    X_emb_dict[fname] = list()
+
+n_neighbours = 200
+for signal_idx in range(len(signal_fields)):
+    print(f"{signal_idx}/{len(signal_fields)}")
+    x_s1 = X_base_dict[fnames[0]][signal_idx]
+    x_s2 = X_base_dict[fnames[1]][signal_idx]
+    model = umap.UMAP(n_neighbors = n_neighbours, n_components =3, min_dist=0.75)
+
+    x_emb = model.fit_transform(np.vstack((x_s1, x_s2)))
+    X_emb_dict[fnames[0]].append(x_emb[:x_s1.shape[0],:])
+    X_emb_dict[fnames[1]].append(x_emb[x_s1.shape[0]:,:])
+
+
+#model GC2 embeddings
+save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/Spikes_study/GC2'
+GC2_dict = gu.load_files(save_dir, '*_PyalData_struct.mat', verbose=False, struct_type = "PyalData")
+GC2_dict = gu.apply_to_dict(gu.add_firing_rates, GC2_dict, 'smooth', std=0.4, num_bins = 20, assymetry = True, continuous = True)
+GC2_dict = gu.apply_to_dict(gu.select_trials, GC2_dict, "dir == ['L', 'R']")
+
+fnames = list(GC2_dict.keys())
 for f_idx, fname in enumerate(fnames):
     print(fname)
-    pos = copy.deepcopy(np.concatenate(CZ3_dict[fname]["pos"].values, axis= 0))
+    pos = copy.deepcopy(np.concatenate(GC2_dict[fname]["pos"].values, axis= 0))
     pos_x = copy.deepcopy(pos[:,0]).reshape(-1,1)
     pos_y = copy.deepcopy(pos[:,1]).reshape(-1,1)
     label_list = list([pos_x, pos_y])
     label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
-    
-    X_base = list()
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_SNR0_5_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_SNR1_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_SNR1_5_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_SNR2_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_SNR3_rates"].values, axis=0)))
-    X_base.append(copy.deepcopy(np.concatenate(CZ3_dict[fname]["Inscopix_traces"].values, axis=0)))
-    
-    X_emb = list()
-    #n_perc = [0.01, 0.01,0.01,0.01, 0.1]
-    for base_idx, base in enumerate(X_base):
-        #n_neighbours = np.round(X_base[0].shape[0]*n_perc[base_idx]).astype(int)
-        n_neighbours = 50
-        model = umap.UMAP(n_neighbors = n_neighbours, n_components =3, min_dist=0.75)
-        X_emb.append(model.fit_transform(base))
-    
-    X_base_dict[fname] = X_base
-    X_emb_dict[fname] = X_emb
     label_signal_dict[fname] = label_list
     label_limits_dict[fname] = label_limits
-    
-    
+
+    X_base = list()
+    for signal in signal_fields:
+        X_base.append(copy.deepcopy(np.concatenate(GC2_dict[fname][signal].values, axis=0)))
+    X_base_dict[fname] = X_base
+    X_emb_dict[fname] = list()
+
+n_neighbours = 50
+for signal_idx in range(len(signal_fields)):
+    print(f"{signal_idx}/{len(signal_fields)}")
+    x_s1 = X_base_dict[fnames[0]][signal_idx]
+    x_s2 = X_base_dict[fnames[1]][signal_idx]
+    model = umap.UMAP(n_neighbors = n_neighbours, n_components =3, min_dist=0.75)
+
+    x_emb = model.fit_transform(np.vstack((x_s1, x_s2)))
+    X_emb_dict[fnames[0]].append(x_emb[:x_s1.shape[0],:])
+    X_emb_dict[fnames[1]].append(x_emb[x_s1.shape[0]:,:])
+
 #compute structure index for all
 fnames = list(X_emb_dict.keys())
 nn_to_check = [3,5,10,20,50,100]
@@ -184,7 +154,7 @@ for label_idx in range(len(label_order)):
                 cbar = fig.colorbar(p, ax=ax,fraction=0.046, pad=0.08)
                 cbar.ax.get_yaxis().labelpad = 8
                 cbar.ax.set_ylabel(label_order[label_idx], rotation=-270, size=15)
-        plt.tight_layout()
+    plt.tight_layout()
     
 #plot structure index as a function of # of nn
 for label_idx in range(len(label_order)):
