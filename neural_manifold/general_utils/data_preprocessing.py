@@ -293,3 +293,82 @@ def _get_neuronal_fields(trial_data, ref_field=None):
         assert np.all(col_lengths == ref_lengths), f"not all lengths in {col} match the reference {ref_field}"
 
     return neuronal_fields
+
+def get_temporal_fields(trial_data, ref_field=None):
+    """
+    Identify time-varying fields in the dataset
+    
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+
+    ref_field : str (optional)
+        time-varying field to use for identifying the rest
+        if not given, the first field that ends with "pos" or "vel" is used
+
+    Returns
+    -------
+    temporal_fields : list of str
+        list of fieldnames that store time-varying signals
+    """
+    if ref_field is None:
+        # look for a spikes field
+        ref_field = [col for col in trial_data.columns.values
+                     if col.endswith("pos") or col.endswith("vel")][0]
+
+    # identify candidates based on the first trial
+    first_trial = trial_data.iloc[0]
+    T = first_trial[ref_field].shape[0]
+    temporal_fields = []
+    for col in first_trial.index:
+        try:
+            if first_trial[col].shape[0] == T:
+                temporal_fields.append(col)
+        except:
+            pass
+
+    # but check the rest of the trials, too
+    ref_lengths = np.array([arr.shape[0] for arr in trial_data[ref_field]])
+    for col in temporal_fields:
+        col_lengths = np.array([arr.shape[0] for arr in trial_data[col]])
+        assert np.all(col_lengths == ref_lengths), f"not all lengths in {col} match the reference {ref_field}"
+
+    return temporal_fields
+
+def keep_only_moving(pd_struct, vel_th):
+
+    if 'sF' in pd_struct.columns:
+        sF = pd_struct['sF'][0]
+    elif 'Fs' in pd_struct.columns:
+        sF = pd_struct['Fs'][0]
+    else:
+        assert True, "must provide sF"
+
+    if 'index_mat' not in pd_struct:
+        pd_struct["index_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1))+
+                                    pd_struct["trial_id"][idx] for idx in pd_struct.index]
+    trial_idx = copy.deepcopy(np.concatenate(pd_struct['index_mat'].values, axis=0))
+
+    if 'vel' not in pd_struct:
+        pos = copy.deepcopy(np.concatenate(pd_struct['pos'].values, axis=0))
+        vel = np.linalg.norm(np.diff(pos, axis= 0), axis=1)*sF
+        vel = np.hstack((vel[0], vel))
+        pd_struct['vel'] = [vel[trial_idx[:,0]==pd_struct["trial_id"][idx]] 
+                                                            for idx in pd_struct.index]
+
+    temporal_fields = get_temporal_fields(pd_struct)
+    temporal_fields.remove('vel')
+    move_struct = copy.deepcopy(pd_struct)
+    still_struct = copy.deepcopy(pd_struct)
+    for field in temporal_fields:
+        move_struct[field] = [pd_struct[field][idx][pd_struct['vel'][idx]>=vel_th]
+                                                            for idx in pd_struct.index]
+        still_struct[field] = [pd_struct[field][idx][pd_struct['vel'][idx]<vel_th]
+                                                            for idx in pd_struct.index]
+    move_struct['vel'] = [pd_struct['vel'][idx][pd_struct['vel'][idx]>=vel_th]
+                                                            for idx in pd_struct.index]
+    still_struct['vel'] = [pd_struct['vel'][idx][pd_struct['vel'][idx]<vel_th]
+                                                            for idx in pd_struct.index]
+                                                            
+    return move_struct, still_struct
