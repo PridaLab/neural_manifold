@@ -51,6 +51,22 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	else:
 		n_splits = 10
 
+	if 'vel_th' in kwargs:
+		vel_th = kwargs['vel_th']
+	else:
+		vel_th = 0
+		kwargs['vel_th'] = vel_th
+		if 'sF' in kwargs:
+			sF = kwargs['sF']
+		else:
+			if 'sF' in pd_struct.columns:
+				sF = pd_struct['sF'][0]
+			elif 'Fs' in pd_struct.columns:
+				sF = pd_struct['Fs'][0]
+			else:
+				assert True, "you must provide the sampling frequency ('sF')"
+			kwargs['sF'] = sF
+
 	if 'verbose' in kwargs:
 		verbose = kwargs['verbose']
 	else:
@@ -65,9 +81,19 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	sI_kernel = np.zeros((len(ks_list), len(assymetry_list), len(sI_nn_list)))
 	R2s_kernel = np.zeros((len(ks_list), len(assymetry_list), n_splits, len(decoder_list)))
 	dim_kernel = np.zeros((len(ks_list), len(assymetry_list)))
+
 	if 'index_mat' not in pd_struct:
 		pd_struct["index_mat"] = [np.zeros((pd_struct[spikes_field][idx].shape[0],1))+
 									pd_struct["trial_id"][idx] for idx in pd_struct.index]
+
+	if ('vel' not in pd_struct) and (vel_th>0):
+		pos = copy.deepcopy(np.concatenate(pd_struct['pos'].values, axis=0))
+		index_mat = np.concatenate(pd_struct["index_mat"].values, axis=0)
+
+		vel = np.linalg.norm(np.diff(pos, axis= 0), axis=1)*sF
+		vel = np.hstack((vel[0], vel))
+		pd_struct['vel'] = [vel[index_mat[:,0]==pd_struct["trial_id"][idx]] 
+	                                   for idx in pd_struct.index]
 
 	for ks_idx, ks_val in enumerate(ks_list):
 		if verbose:
@@ -78,21 +104,23 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 
 			#compute firing rates with new ks_val
 			if ks_val == 0:
-				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
-				rates =  copy.deepcopy(np.concatenate(pd_struct_mov[spikes_field].values, axis=0))
+				rates =  copy.deepcopy(np.concatenate(pd_struct[spikes_field].values, axis=0))
 			elif ks_val == np.inf:
-				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
-				rates =  copy.deepcopy(np.concatenate(pd_struct_mov[traces_field].values, axis=0))
+				rates =  copy.deepcopy(np.concatenate(pd_struct[traces_field].values, axis=0))
 			else:
 				pd_struct = gu.add_firing_rates(pd_struct,'smooth', std=ks_val, num_std=5, 
 															assymetry=assy_val, continuous=True)
-				pd_struct_mov = gu.select_trials(pd_struct, "dir == ['L', 'R']")
-				rates = copy.deepcopy(np.concatenate(pd_struct_mov[rates_field].values, axis=0))
+				rates = copy.deepcopy(np.concatenate(pd_struct[rates_field].values, axis=0))
 
-			pos = copy.deepcopy(np.concatenate(pd_struct_mov['pos'].values, axis=0))
+			pos = copy.deepcopy(np.concatenate(pd_struct['pos'].values, axis=0))
+			trial_idx = copy.deepcopy(np.concatenate(pd_struct['index_mat'].values, axis=0))
+			if vel_th>0:
+				vel = copy.deepcopy(np.concatenate(pd_struct['vel'].values, axis=0))
+				pos = pos[vel>=vel_th, :]
+				rates = rates[vel>=vel_th,:]
+				trial_idx = trial_idx[vel>=vel_th,:]
 
 			#1. Check decoder ability
-			trial_idx = copy.deepcopy(np.concatenate(pd_struct_mov['index_mat'].values, axis=0))
 			R2s_temp, _ = dec.decoders_1D(x_base_signal=rates,y_signal_list=pos[:,0],n_splits=n_splits,
 									decoder_list=decoder_list,trial_signal=trial_idx,verbose=verbose)
 
@@ -124,6 +152,241 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	return R2s_kernel, sI_kernel, dim_kernel
 
 
+@gu.check_inputs_for_pd
+def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, **kwargs):
+
+	if 'nn_list' in kwargs:
+		nn_list = kwargs['nn_list']
+	else:
+		nn_list = [3, 10, 20, 30, 40, 50, 60, 80, 100, 200, 500, 1000]
+		kwargs['nn_list'] = nn_list
+
+	if 'min_dist' in kwargs:
+		min_dist = kwargs['min_dist']
+	else:
+		min_dist = 0.75
+		kwargs['min_dist'] = min_dist
+
+	if 'dim' in kwargs:
+		dim = kwargs['dim']
+	else:
+		dim = 10
+		kwargs['dim'] = dim
+
+	if 'decoder_list' in kwargs:
+		decoder_list = kwargs['decoder_list']
+	else:
+		decoder_list = ["wf", "wc", "xgb", "svr"]
+
+	if 'n_splits' in kwargs:
+		n_splits = kwargs['n_splits']
+	else:
+		n_splits = 10
+
+	if 'verbose' in kwargs:
+		verbose = kwargs['verbose']
+	else:
+		verbose = False
+		kwargs['verbose'] = verbose
+	label_list = list()
+	for label in label_signal:
+		if label.ndim == 2:
+			label = label[:,0]
+		label_list.append(label)
+	label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]    
+
+	sI_og = np.zeros((len(nn_list), len(label_list)))*np.nan
+	sI_emb = np.zeros((len(nn_list), len(nn_list), len(label_list)))
+	R2s_nn = np.zeros((len(nn_list), n_splits, len(label_list), len(decoder_list)))
+	og_space = np.arange(base_signal.shape[1])
+	if verbose:
+		print("Computing sI in og space:")
+
+	for label_idx, label in enumerate(label_list):
+		label_lim = label_limits[label_idx]
+		if verbose:
+			print(f"\tSI {label_idx+1}/{len(label_list)}: X/X", end = '', sep = '')
+			pre_del = '\b\b\b'
+		if len(np.unique(label))<10:
+			nbins = len(np.unique(label))
+		else:
+			nbins = 10
+		for sI_nn_idx, sI_nn in enumerate(nn_list):
+			if verbose:
+				print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
+				pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
+			temp,_ , _ = sI.compute_structure_index(base_signal,label,nbins,og_space,0,nn=sI_nn,
+																vmin=label_lim[0], vmax=label_lim[1])
+			sI_og[sI_nn_idx,label_idx] = temp
+
+	if verbose:
+		print('')
+	emb_space = np.arange(dim)
+	emb_list = list()
+	for nn_idx, nn in enumerate(nn_list):
+		if verbose:
+			print(f"NN: {nn} ({nn_idx+1}/{len(nn_list)}):")
+		model = umap.UMAP(n_neighbors = nn, n_components =dim, min_dist=0.75)
+		if verbose:
+			print("\tFitting model...", sep= '', end = '')
+		emb_signal = model.fit_transform(base_signal)
+		emb_list.append(emb_signal)
+		if verbose:
+			print("Done")
+
+		for label_idx, label in enumerate(label_list):
+			label_lim = label_limits[label_idx]
+			if verbose:
+				print(f"\tComputing sI {label_idx+1}/{len(label_list)}: X/X", sep='', end = '')
+				pre_del = '\b'*3
+			if len(np.unique(label))<10:
+				nbins = len(np.unique(label))
+			else:
+				nbins = 10
+			for sI_nn_idx, sI_nn in enumerate(nn_list):
+				if verbose:
+					print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
+					pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
+				temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
+																	vmin=label_lim[0], vmax=label_lim[1])
+				sI_emb[nn_idx,sI_nn_idx,label_idx] = temp
+
+		if verbose:
+			print("\n\tComputing R2s:")
+
+		#1. Check decoder ability
+		R2s_temp, _ = dec.decoders_1D(x_base_signal=base_signal,y_signal_list=label_list,n_splits=n_splits, n_dims = dim,
+								emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=verbose)
+		for dec_idx, dec_name in enumerate(decoder_list):
+			R2s_nn[nn_idx,:, :,dec_idx] = R2s_temp['umap'][dec_name][:,:,0]
+
+	return sI_og, sI_emb, R2s_nn, emb_list, kwargs
+
+
+@gu.check_inputs_for_pd
+def compute_umap_dim(base_signal=None, label_signal = None, trial_signal = None, **kwargs):
+
+	if 'nn_list' in kwargs:
+		nn_list = kwargs['nn_list']
+	else:
+		nn_list = [3, 10, 20, 30, 60, 100, 200]
+		kwargs['nn_list'] = nn_list
+
+	if 'min_dist' in kwargs:
+		min_dist = kwargs['min_dist']
+	else:
+		min_dist = 0.75
+		kwargs['min_dist'] = min_dist
+
+	if 'nn' in kwargs:
+		nn = kwargs['nn']
+	else:
+		nn = 60
+		kwargs['nn'] = nn
+
+	if 'max_dim' in kwargs:
+		max_dim = kwargs['max_dim']
+	else:
+		max_dim = 12
+		kwargs['max_dim'] = max_dim
+
+	if 'decoder_list' in kwargs:
+		decoder_list = kwargs['decoder_list']
+	else:
+		decoder_list = ["wf", "wc", "xgb", "svr"]
+
+	if 'n_splits' in kwargs:
+		n_splits = kwargs['n_splits']
+	else:
+		n_splits = 10
+
+	if 'verbose' in kwargs:
+		verbose = kwargs['verbose']
+	else:
+		verbose = False
+		kwargs['verbose'] = verbose
+
+	label_list = list()
+	for label in label_signal:
+		if label.ndim == 2:
+			label = label[:,0]
+		label_list.append(label)
+	label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]    
+
+	sI_dim = np.zeros((max_dim, len(nn_list), len(label_list)))
+	R2s_dim = np.zeros((max_dim, n_splits, len(label_list), len(decoder_list)))
+	trust_dim = np.zeros((max_dim,len(nn_list)))
+	cont_dim = np.zeros((max_dim, len(nn_list)))
+
+
+	if verbose:
+		print("Computing rank indices og space...", end = '', sep = '')
+	base_signal_indices = dim_validation.compute_rank_indices(base_signal)
+	if verbose:
+		print("\b\b\b: Done")
+
+	for dim in range(max_dim):
+		emb_space = np.arange(dim+1)
+		if verbose:
+			print(f"Dim: {dim+1} ({dim+1}/{max_dim})")
+
+		model = umap.UMAP(n_neighbors = nn, n_components =dim+1, min_dist=0.75)
+		if verbose:
+			print("\tFitting model...", sep= '', end = '')
+		emb_signal = model.fit_transform(base_signal)
+		if verbose:
+			print("\b\b\b: Done")
+		#1. Compute trustworthiness
+		if verbose:
+			print("\tComputing trustworthiness...", sep= '', end = '')
+		temp = dim_validation.trustworthiness_vector(base_signal, emb_signal ,nn_list[-1], indices_source = base_signal_indices)
+		trust_dim[dim,:] = temp[nn_list]
+		if verbose:
+			print(f"\b\b\b: {np.mean(trust_dim[dim,:]):.2f}")
+
+		#2. Compute continuity
+		if verbose:
+			print("\tComputing continuity...", sep= '', end = '')
+		temp = dim_validation.continuity_vector(base_signal, emb_signal ,nn_list[-1])
+		cont_dim[dim,:] = temp[nn_list]
+		if verbose:
+			print(f"\b\b\b: {np.mean(cont_dim[dim,:]):.2f}")
+
+		#3. Compute sI
+		for label_idx, label in enumerate(label_list):
+			label_lim = label_limits[label_idx]
+			if verbose:
+				print(f"\tComputing sI {label_idx+1}/{len(label_list)}: X/X", sep='', end = '')
+				pre_del = '\b'*3
+
+			if len(np.unique(label))<10:
+				nbins = len(np.unique(label))
+			else:
+				nbins = 10
+			for sI_nn_idx, sI_nn in enumerate(nn_list):
+				if verbose:
+					print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
+					pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
+				temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
+																	vmin=label_lim[0], vmax=label_lim[1])
+				sI_dim[dim,sI_nn_idx,label_idx] = temp
+			if verbose:
+				print(f" - Mean result: {np.nanmean(sI_dim[dim,:,label_idx]):.2f}")
+
+		#4. Check decoder ability
+		if verbose:
+			print("\tComputing R2s:")
+		R2s_temp, _ = dec.decoders_1D(x_base_signal=base_signal,y_signal_list=label_list,n_splits=n_splits, n_dims = dim+1,
+								emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=verbose)
+		for dec_idx, dec_name in enumerate(decoder_list):
+			R2s_dim[dim,:, :,dec_idx] = R2s_temp['umap'][dec_name][:,:,0]
+
+		if verbose:
+			print(f"\t\tMean result: {np.nanmean(R2s_dim[dim,:, :, :]):.2f}")	
+	return trust_dim, cont_dim, sI_dim, R2s_dim, kwargs
+
+
+
 def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, **kwargs):
 
 	if 'nn_list' in kwargs:
@@ -143,15 +406,21 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 	else:
 		dim = 3
 		kwargs['dim'] = 3
-        
+
+	if 'n_iter' in kwargs:
+		n_iter = kwargs['n_iter']
+	else:
+		n_iter = 5
+		kwargs['n_iter'] = n_iter    
+
 	if 'verbose' in kwargs:
 		verbose = kwargs['verbose']
 	else:
 		verbose = False
 		kwargs['verbose'] = verbose
 	kwargs["signal_field"] = signal_field
-	sI_nn = np.zeros((len(nn_list), 2, len(sI_nn_list)))
-	angle_nn = np.zeros((len(nn_list), 4))
+	sI_nn = np.zeros((len(nn_list), 2, len(sI_nn_list), n_iter))
+	angle_nn = np.zeros((len(nn_list), 4, n_iter))
 
 	if 'dir_mat' not in pd_struct_pre.columns:
 		pd_struct_pre["dir_mat"] = [np.zeros((pd_struct_pre["pos"][idx].shape[0],1)).astype(int)+
@@ -188,61 +457,65 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 		if verbose:
 			print(f"Neighbours: {nn_val} ({nn_idx+1}/{len(nn_list)})")
 
-		#1. Project data
-		model = umap.UMAP(n_neighbors = nn_val, n_components =dim, min_dist=0.75)
-		if verbose:
-			print("\tFitting model...", sep= '', end = '')
-		concat_emb = model.fit_transform(concat_signal)
-
-		emb_p = concat_emb[index[:,0]==0,:]
-		emb_r = concat_emb[index[:,0]==1,:]
-		if verbose:
-			print("Done")
-
-		#2. Compute structure index
-		emb_space = np.linspace(0,emb_p.shape[1]-1, emb_p.shape[1]).astype(int)
-		posLimits_p = [np.percentile(pos_p[:,0],5), np.percentile(pos_p[:,0],95)]
-		posLimits_r = [np.percentile(pos_r[:,0],5), np.percentile(pos_r[:,0],95)]
-
-		if verbose:
-			print("\tSI: X/X", end = '', sep = '')
-			pre_del = '\b\b\b'
-
-		for sI_nn_idx, sI_nn_val in enumerate(sI_nn_list):
+		for ite in range(n_iter):
 			if verbose:
-				print(f"{pre_del}{sI_nn_idx+1}/{len(sI_nn_list)}", sep = '', end = '')
-				pre_del =  (len(str(nn_idx+1))+len(str(len(sI_nn_list)))+1)*'\b'
+				print(f"\tIteration {ite+1}/{n_iter}")
 
-			temp,_ , _ = sI.compute_structure_index(emb_p,pos_p[:,0],10,emb_space,0,nn=sI_nn_val,
-																vmin=posLimits_p[0],vmax=posLimits_p[1])
-			sI_nn[nn_idx, 0, sI_nn_idx] = temp
+			#1. Project data
+			model = umap.UMAP(n_neighbors = nn_val, n_components =dim, min_dist=0.75)
+			if verbose:
+				print("\tFitting model...", sep= '', end = '')
+			concat_emb = model.fit_transform(concat_signal)
 
-			temp,_ , _ = sI.compute_structure_index(emb_r,pos_r[:,0],10,emb_space,0,nn=sI_nn_val,
-																vmin=posLimits_r[0],vmax=posLimits_r[1])
-			sI_nn[nn_idx, 1, sI_nn_idx] = temp
+			emb_p = concat_emb[index[:,0]==0,:]
+			emb_r = concat_emb[index[:,0]==1,:]
+			if verbose:
+				print("Done")
 
+			#2. Compute structure index
+			emb_space = np.linspace(0,emb_p.shape[1]-1, emb_p.shape[1]).astype(int)
+			posLimits_p = [np.percentile(pos_p[:,0],5), np.percentile(pos_p[:,0],95)]
+			posLimits_r = [np.percentile(pos_r[:,0],5), np.percentile(pos_r[:,0],95)]
 
-		#3. Align and compute rotation-angle
-		if verbose:
-			print("\n\tAligning manifolds...", sep= '', end = '')
-		#TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0],ndims = 2, nCentroids = 10)
-		#_,_,Z = get_angle_from_rot(RAB)
-		#angle_nn[nn_idx, 0] = Z 
+			if verbose:
+				print("\tSI: X/X", end = '', sep = '')
+				pre_del = '\b\b\b'
 
-		TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0], ndims = dim, nCentroids = 10)
-		X,Y,Z = get_angle_from_rot(RAB)
-		angle_nn[nn_idx, 0] = X
-		angle_nn[nn_idx, 1] = Y
-		angle_nn[nn_idx, 2] = Z
-        
-		tr = (np.trace(RAB)-1)/2
-		if abs(tr)>1:
-			tr = round(tr,2)
+			for sI_nn_idx, sI_nn_val in enumerate(sI_nn_list):
+				if verbose:
+					print(f"{pre_del}{sI_nn_idx+1}/{len(sI_nn_list)}", sep = '', end = '')
+					pre_del =  (len(str(nn_idx+1))+len(str(len(sI_nn_list)))+1)*'\b'
+
+				temp,_ , _ = sI.compute_structure_index(emb_p,pos_p[:,0],10,emb_space,0,nn=sI_nn_val,
+																	vmin=posLimits_p[0],vmax=posLimits_p[1])
+				sI_nn[nn_idx, 0, sI_nn_idx, ite] = temp
+
+				temp,_ , _ = sI.compute_structure_index(emb_r,pos_r[:,0],10,emb_space,0,nn=sI_nn_val,
+																	vmin=posLimits_r[0],vmax=posLimits_r[1])
+				sI_nn[nn_idx, 1, sI_nn_idx, ite] = temp
+
+			#3. Align and compute rotation-angle
+			if verbose:
+				print("\n\tAligning manifolds...", sep= '', end = '')
+			#TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0],ndims = 2, nCentroids = 10)
+			#_,_,Z = get_angle_from_rot(RAB)
+			#angle_nn[nn_idx, 0] = Z 
+
+			TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0], ndims = dim, nCentroids = 10)
+			X,Y,Z = get_angle_from_rot(RAB)
+			angle_nn[nn_idx, 0, ite] = X
+			angle_nn[nn_idx, 1, ite] = Y
+			angle_nn[nn_idx, 2, ite] = Z
+	        
+			tr = (np.trace(RAB)-1)/2
 			if abs(tr)>1:
-				tr = np.nan
-		angle_nn[nn_idx, 3] = math.acos(tr)*180/np.pi
-		if verbose:
-			print(f"\b\b\b: {angle_nn[nn_idx, 3]:.2f}º - Done")
+				tr = round(tr,2)
+				if abs(tr)>1:
+					tr = np.nan
+			angle_nn[nn_idx, 3, ite] = math.acos(tr)*180/np.pi
+			if verbose:
+				print(f"\b\b\b: {angle_nn[nn_idx, 3, ite]:.2f}º - Done")
+
 		fig= plt.figure(figsize = (12, 3))
 
 		ax = plt.subplot(1,4,1, projection='3d')
@@ -253,7 +526,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 		ax.set_zlabel('Dim 3', labelpad= -8)
 
 		ax = plt.subplot(1,4,2, projection='3d')
-		ax.set_title(f"SI pre:{np.mean(sI_nn[nn_idx, 0, :]):2f}")
+		ax.set_title(f"SI pre:{np.mean(sI_nn[nn_idx, 0, :, :]):2f}")
 
 		ax.scatter(*emb_p[:,:3].T, c=pos_p[:,0], cmap = plt.cm.magma)
 		ax.set_xlabel('Dim 1', labelpad= -8)
@@ -262,14 +535,14 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 
 		ax = plt.subplot(1,4,3, projection='3d')
 		ax.scatter(*emb_r[:,:3].T, c=dir_mat_r[:,0])
-		ax.set_title(f"Rot angle: {angle_nn[nn_idx, 3]:.2f}")
+		ax.set_title(f"Rot angle: {np.nanmean(angle_nn[nn_idx, 3, :]):.2f}")
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
 
 		ax = plt.subplot(1,4,4, projection='3d')
 		ax.scatter(*emb_r[:,:3].T, c=pos_r[:,0], cmap = plt.cm.magma)
-		ax.set_title(f"SI pos:{np.mean(sI_nn[nn_idx, 1, :]):2f}")
+		ax.set_title(f"SI pos:{np.mean(sI_nn[nn_idx, 1, :, :]):2f}")
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
