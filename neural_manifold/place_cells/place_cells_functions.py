@@ -22,15 +22,13 @@ from io import BytesIO
 from scipy import ndimage
 
 @gu.check_inputs_for_pd
-def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None, dim = 2,save_dir = None,**kwargs):
+def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = None,**kwargs):
     """
     Parameters
     ----------
     pos_signal : TYPE, optional
         DESCRIPTION. The default is None.
-    rates_signal : TYPE, optional
-        DESCRIPTION. The default is None.
-    traces_signal : TYPE, optional
+   spikes_signal : TYPE, optional
         DESCRIPTION. The default is None.
     dim : TYPE, optional
         DESCRIPTION. The default is 2.
@@ -73,12 +71,10 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
     
     assert sum([arg in kwargs for arg in ['bin_width', 'bin_num']]) < 2,\
                                                 "only give bin_width or bin_num"
-    assert sum([not isinstance(arg, type(None)) for arg in [rates_signal, 
-                                traces_signal]]) < 2, "only give rates or traces"
 
-    assert 'sF' in kwargs, "you must provide sampling frequency ('sF')"
+    assert 'sF' in kwargs, "you must provide the sampling frequency ('sF')"
     
-    assert dim>0, f"dim must be a positive integer but it was {dim}"
+    assert dim>0, "dim must be a positive integer"
 
     assert pos_signal.shape[1]>= dim, f"pos_signal has less dimensions ({pos_signal.shape[1]}) " + \
                                 f"than the indicated in dim ({dim})"
@@ -91,17 +87,13 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
     if 'std_pos' not in kwargs:
         kwargs['std_pos'] = 0.025 #s
 
-    #std to smooth traces
-    if ('std_traces' not in kwargs) and (not isinstance(traces_signal, type(None))):
-        kwargs['std_traces'] = 0.25 #s
+    #ignore edges
+    if 'ignore_edges' not in kwargs:
+        kwargs['ignore_edges'] = 10 #%
 
     if 'std_pdf' not in kwargs:
         kwargs['std_pdf'] = 2 #cm
 
-    #ignore edges
-    if 'ignore_edges' not in kwargs:
-        kwargs['ignore_edges'] = 10 #%
-    
     if 'method' not in kwargs:
         kwargs['method'] = 'spatial_info'
 
@@ -111,6 +103,11 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
     if 'min_shift' not in kwargs:
         kwargs['min_shift'] = 5 
     
+    if 'th_metric' not in kwargs:
+        kwargs['th_metric'] = 99
+
+    if 'mouse' not in kwargs:
+        kwargs['mouse'] = 'unknown'
     #Compute velocity if not provided
     if 'vel_signal' not in kwargs:
         vel = np.linalg.norm(np.diff(pos_signal, axis= 0), axis=1)*kwargs['sF']
@@ -128,29 +125,17 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
         pos = copy.deepcopy(pos_signal)
     if pos.ndim == 1:
         pos = pos.reshape(-1,1)
-    #if traces provided, preprocess it 
-    if not isinstance(traces_signal, type(None)):
-        if kwargs['std_traces']>0:
-            neu_sig = gu.smooth_data(traces_signal, std = kwargs['std_traces'], bin_size = 1/kwargs['sF'], assymetry = False)
-        else:
-            neu_sig = copy.deepcopy(traces_signal)
-    else:
-        neu_sig = copy.deepcopy(rates_signal)
+
+    neu_sig = copy.deepcopy(spikes_signal)
 
     #compute moving epochs
     #TODO: consider minimum epoch duration and merging those with little time in between
     if 'vel_th' not in kwargs:
         kwargs['vel_th'] = 5 #cm/s
     move_epochs = vel>=kwargs['vel_th'] 
-
     #keep only moving epochs
     pos = pos[move_epochs]
     neu_sig = neu_sig[move_epochs]
-
-    if 'spikes_signal' in kwargs:
-        spikes = kwargs["spikes_signal"][move_epochs]
-    else:
-        spikes = None
         
     if 'direction_signal' in kwargs:
         direction = kwargs["direction_signal"][move_epochs]
@@ -163,9 +148,7 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
         pos = pos[pos_boolean]
         neu_sig = neu_sig[pos_boolean]
         direction = direction[pos_boolean]
-        if not isinstance(spikes, type(None)):
-            spikes = spikes[pos_boolean]
-            th_spikes = np.sum(spikes, axis=0)>20
+
     #Create grid along each dimensions
     min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
     obs_length = max_pos - min_pos #(pos.shape[1],)
@@ -199,6 +182,18 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
     #compute metric
     metric_val = _compute_metric(pos_pdf, neu_pdf, kwargs["method"])
     
+    space_dims = tuple(range(neu_pdf.ndim - 2)) #idx of axis related to space
+    subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
+
+    #check which cells do not have a minimum activity
+    val_dirs = np.array(np.unique(direction))
+    num_dirs = len(val_dirs)
+
+    total_firing_neurons = np.zeros((neu_sig.shape[1], num_dirs))
+    for dr in range(num_dirs):
+        total_firing_neurons[:,dr] = np.sum(neu_sig[direction[:,0]==val_dirs[dr],:]>0, axis=0)
+    low_firing_neurons = total_firing_neurons<10
+
     #do shuffling
     shuffled_metric_val = np.zeros((kwargs["num_shuffles"], metric_val.shape[0], metric_val.shape[1]))
     min_shift = np.ceil(kwargs['min_shift']*kwargs['sF'])
@@ -221,20 +216,38 @@ def get_place_cells(pos_signal = None, rates_signal = None, traces_signal = None
         
         shuffled_metric_val[idx] = _compute_metric(shifted_pos_pdf, shifted_neu_pdf, kwargs["method"])
         
-    th_metric_val = np.percentile(shuffled_metric_val, 99, axis=0)
-    
-    place_cells = np.linspace(0, metric_val.shape[0]-1, metric_val.shape[0])
-    place_cells = place_cells[np.any(metric_val>th_metric_val,axis=1)*th_spikes].astype(int)
-    
-    place_fields, place_fields_id = _check_placefields(pos_pdf, neu_pdf, place_cells)
+    th_metric_val = np.percentile(shuffled_metric_val, kwargs['th_metric'], axis=0)
+    th_metric_val[th_metric_val<0] = 0
+    place_cells_idx = np.linspace(0, metric_val.shape[0]-1, metric_val.shape[0])
+    place_cells_idx = place_cells_idx[np.any((~low_firing_neurons)*metric_val>th_metric_val,axis=1)].astype(int)
+    place_cells_dir = (metric_val*~low_firing_neurons>th_metric_val).astype(int)
+
+
     if dim==1:
-        _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, 
-                                     spikes, kwargs["method"], save_dir)
+        _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cells_idx, 
+                                        place_cells_dir, kwargs["method"], save_dir, kwargs["mouse"])
     elif dim==2:
-        _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, 
+        _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells_idx, 
                                      spikes, kwargs["method"], save_dir)
-        
-    return place_cells, metric_val, th_metric_val, pos_pdf, neu_pdf
+    
+    place_fields, place_fields_id = _check_placefields(pos_pdf, neu_pdf, place_cells_idx)
+    
+    output_dict = {
+        "place_cells_idx": place_cells_idx,
+        "place_cells_dir": place_cells_dir,
+        "place_fields": place_fields,
+        "metric_val": metric_val,
+        "shuffled_metric_val": shuffled_metric_val,
+        "th_metric_val": th_metric_val,
+        "low_firing_neurons": low_firing_neurons,
+        "total_firing_neurons": total_firing_neurons,
+        "pos_pdf": pos_pdf,
+        "neu_pdf": neu_pdf,
+        "mapAxis": mapAxis,
+        "params": kwargs
+    }
+
+    return output_dict
 
 
 def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes, method, save_dir):
@@ -309,11 +322,11 @@ def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
     #Save html file
-    with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.htm"),'w') as f:
+    with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
 
    
-def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes, method, save_dir):
+def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cells, place_cells_dir, method, save_dir, mouse):
     min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
     cells_per_row = 4
     cells_per_col = 4
@@ -327,12 +340,14 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
     html = html + 'h2 {text-align: center;}\n'
     html = html + 'img {display: block; width: 80%; margin-left: auto; margin-right: auto;}'
     html = html + '</style>\n'
-    html = html + "<h1>Place cells - {method}</h1>\n<br>\n"    #Add title
+    html = html + f"<h1>{mouse} Place Cells - {method}</h1>\n<br>\n"    #Add title
     html = html + f"<br><h2>{datetime.now().strftime('%d%m%y_%H%M%S')}</h2><br>\n"    #Add subtitle
     
+    cells_per_plot = cells_per_row*cells_per_col
+    num_figures = np.ceil(neu_sig.shape[1]/cells_per_plot).astype(int)
     for cell_group in range(num_figures):
-        fig= plt.figure(figsize = (12, 12))
-        
+        fig= plt.figure(figsize = (12, 10))
+
         cell_st = cell_group*cells_per_plot
         cells_to_plot = np.min([neu_sig.shape[1]-cell_st, cells_per_plot])
         for cell_idx in range(cells_to_plot):
@@ -347,22 +362,15 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
                 
             ax  = plt.subplot2grid((cells_per_row*6, cells_per_col), (row_idx*6, col_idx), rowspan=2)
             ax.plot(pos[:,0], pos[:,1], color = [.5,.5,.5], alpha = 0.3)
-            
-            if isinstance(spikes, type(None)):
-                active_ts = neu_sig[:,gcell_idx] > 0
-                t_neu_sig = neu_sig[active_ts, gcell_idx]
-                t_pos = pos[active_ts,:]
-                signal_inds = t_neu_sig.argsort()
-                sorted_pos = t_pos[signal_inds,:]
-                sorted_neu_sig = t_neu_sig[signal_inds]
-                ax.scatter(*sorted_pos[:,:2].T, c = sorted_neu_sig, s= 8)
-            else:
-                ax.scatter(*pos[spikes[:,gcell_idx]>0,:2].T, color = color_cell, s= 5)
+            color= ['C9' if l == 1 else 'C1' for l in direction[neu_sig[:,gcell_idx]>0]]
+            ax.scatter(*pos[neu_sig[:,gcell_idx]>0,:2].T, c = color, s= 5)
+
             ax.set_xlim([min_pos[0], max_pos[0]])
             ax.set_ylim([min_pos[1], max_pos[1]])
             title = list()
             title.append(f"Cell: {gcell_idx} -")
-            [title.append(f"{mval:.2f} ") for mval in metric_val[gcell_idx]];
+            [title.append(f"{midx}: {mval:.2f} ") for midx, mval in enumerate(metric_val[gcell_idx]) 
+                                                             if place_cells_dir[gcell_idx, midx]==1];
             ax.set_title(' '.join(title), color = color_cell)
             
             ax  = plt.subplot2grid((cells_per_row*6, cells_per_col), (row_idx*6+2, col_idx), rowspan=2)
@@ -371,14 +379,14 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
             ax.set_xticks([])
             cbar = fig.colorbar(p, ax=ax,fraction=0.3, pad=0.08, location = 'bottom')
             cbar.ax.set_ylabel(method, rotation=270, size=10)
-            
+        
         tmpfile = BytesIO()
         fig.savefig(tmpfile, format='png')
         encoded = base64.b64encode(tmpfile.getvalue()).decode('utf-8')
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
     #Save html file
-    with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.htm"),'w') as f:
+    with open(os.path.join(save_dir, f"{mouse}_placeCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
 
 def _compute_metric(pos_pdf, neu_pdf, method):
@@ -788,15 +796,3 @@ def _get_pdf(pos, neu_signal, mapAxis, dim, dir_mat = None):
     pos_pdf = pos_pdf/np.sum(pos_pdf,axis=tuple(range(pos_pdf.ndim - 1))) #normalize probability density function
     
     return pos_pdf, neu_pdf
-
-
-
-
-    
-
-
-
-
-
-
-
