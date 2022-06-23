@@ -6,7 +6,6 @@ Created on Tue Mar 15 17:40:39 2022
 @author: julio
 """
 
-import copy
 import numpy as np
 from neural_manifold import general_utils as gu
 from neural_manifold import decoders as dec 
@@ -15,14 +14,12 @@ from neural_manifold import structure_index as sI
 from neural_manifold.dimensionality_reduction import validation as dim_validation 
 from neural_manifold.dimensionality_reduction import compute_dimensionality as compute_dim
 
+from kneed import KneeLocator
 
-import math
+import copy, os, math, random, umap, base64
 import matplotlib.pyplot as plt
-import umap
 from datetime import datetime
-import base64
 from io import BytesIO
-import os
 
 def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	#CHECK INPUTS
@@ -93,7 +90,7 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 		vel = np.linalg.norm(np.diff(pos, axis= 0), axis=1)*sF
 		vel = np.hstack((vel[0], vel))
 		pd_struct['vel'] = [vel[index_mat[:,0]==pd_struct["trial_id"][idx]] 
-	                                   for idx in pd_struct.index]
+							           for idx in pd_struct.index]
 
 	for ks_idx, ks_val in enumerate(ks_list):
 		if verbose:
@@ -148,7 +145,7 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 																max_neigh = int(rates.shape[0]*0.1))
 			if verbose and not np.isnan(dim_kernel[ks_idx, assy_idx]):
 				print(f"{dim_kernel[ks_idx, assy_idx]}")
-                
+			    
 	return R2s_kernel, sI_kernel, dim_kernel
 
 
@@ -780,3 +777,178 @@ def check_rotation_emb_quality(pd_struct_pre, pd_struct_rot, signal_field,label_
 		f.write(html)
         
 	return sI_dim, trust_dim, cont_dim, kwargs
+
+
+
+@gu.check_inputs_for_pd
+def compute_umap_to_npoints(base_signal=None, label_signal = None, **kwargs):
+	import warnings
+	warnings.filterwarnings("ignore")
+
+	if 'nn_list' in kwargs:
+		nn_list = kwargs['nn_list']
+	else:
+		nn_list = [3, 10, 20, 30, 60, 100, 200]
+		kwargs['nn_list'] = nn_list
+
+	if 'min_dist' in kwargs:
+		min_dist = kwargs['min_dist']
+	else:
+		min_dist = 0.75
+		kwargs['min_dist'] = min_dist
+
+	if 'nn' in kwargs:
+		nn = kwargs['nn']
+	else:
+		nn = 60
+		kwargs['nn'] = nn
+
+	if 'max_dim' in kwargs:
+		max_dim = kwargs['max_dim']
+	else:
+		max_dim = 12
+		kwargs['max_dim'] = max_dim
+
+	if 'min_points' in kwargs:
+		min_points = kwargs['min_points']
+	else:
+		min_points = 1200
+		kwargs['min_points'] = min_points
+
+	if 'max_points' in kwargs:
+		max_points = kwargs['max_points']
+	else:
+		max_points = 12000
+		kwargs['max_points'] = max_points
+
+	if 'n_steps' in kwargs:
+		n_steps = kwargs['n_steps']
+	else:
+		n_steps = 10
+		kwargs['n_steps'] = n_steps
+
+	if 'n_splits' in kwargs:
+		n_splits = kwargs['n_splits']
+	else:
+		n_splits = 10
+
+	if 'verbose' in kwargs:
+		verbose = kwargs['verbose']
+	else:
+		verbose = False
+		kwargs['verbose'] = verbose
+
+	#get point_list containing the number of points to be included on each iteration
+	num_points = base_signal.shape[0]
+	point_list = np.unique(np.linspace(min_points, max_points,n_steps,dtype=int))
+	kwargs["og_point_list"] = point_list
+	point_list = point_list[point_list<=num_points]
+
+	kwargs["point_list"] = point_list
+	label_list = list()
+	for label in label_signal:
+		if label.ndim == 2:
+			label = label[:,0]
+		label_list.append(label)
+
+	points_picked_list = np.zeros((n_steps,n_splits,num_points)).astype(bool)
+
+	inner_dim = np.zeros((n_steps, n_splits))*np.nan
+	inner_dim_radii_vs_nn = np.zeros((n_steps, n_splits, 1000, 2))*np.nan
+
+	trust_dim = np.zeros((n_steps, n_splits,len(nn_list)))*np.nan
+	trust_dim_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list)))*np.nan
+
+	cont_dim = np.zeros((n_steps, n_splits,len(nn_list)))*np.nan
+	cont_dim_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list)))*np.nan
+
+	sI_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list), len(label_list)))*np.nan
+    
+	#Iterate over each one
+	dim_space = np.linspace(1,max_dim, max_dim).astype(int)
+	for npoint_idx, npoint_val in enumerate(point_list):
+		if verbose:
+			print(f"Checking number of points: {npoint_val} ({npoint_idx+1}/{n_steps}):")
+			print("\tIteration X/X", sep= '', end = '')
+			pre_del = '\b\b\b'
+
+		for split_idx in range(n_splits):
+			if verbose:
+				print(pre_del, f"{split_idx+1}/{n_splits}", sep = '', end = '')
+				pre_del = (len(str(split_idx+1))+len(str(n_splits))+1)*'\b'
+
+			points_picked = random.sample(list(np.arange(num_points).astype(int)), npoint_val)
+			points_picked_list[npoint_idx, split_idx, points_picked] = True 
+			it_signal = copy.deepcopy(base_signal[points_picked,:])
+			it_label_list = [label[points_picked] for label in label_list]
+			it_label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in it_label_list]
+
+			#1. Inner dim
+			m , radius, neigh = compute_dim.compute_inner_dim(it_signal)
+			inner_dim[npoint_idx, split_idx] = m
+			inner_dim_radii_vs_nn[npoint_idx, split_idx, :radius.shape[0],:] = np.hstack((radius, neigh))
+
+			base_signal_indices = dim_validation.compute_rank_indices(it_signal)
+
+			for dim in range(max_dim):
+				#0. Model
+				emb_space = np.arange(dim+1)
+				model = umap.UMAP(n_neighbors = nn, n_components =dim+1, min_dist=0.75)
+				emb_signal = model.fit_transform(it_signal)
+				#1. Compute trustworthiness
+				temp = dim_validation.trustworthiness_vector(it_signal, emb_signal ,nn_list[-1], indices_source = base_signal_indices)
+				trust_dim_values[npoint_idx, split_idx, dim,:] = temp[nn_list]
+
+				#2. Compute continuity
+				temp = dim_validation.continuity_vector(it_signal, emb_signal ,nn_list[-1])
+				cont_dim_values[npoint_idx, split_idx, dim,:] = temp[nn_list]
+
+				#3. Compute sI
+				for label_idx, label in enumerate(it_label_list):
+					label_lim = it_label_limits[label_idx]
+					if len(np.unique(label))<10:
+						nbins = len(np.unique(label))
+					else:
+						nbins = 10
+					for sI_nn_idx, sI_nn in enumerate(nn_list):
+						try:
+							temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
+																				vmin=label_lim[0], vmax=label_lim[1])
+						except:
+							temp = np.nan
+						sI_values[npoint_idx,split_idx,dim,sI_nn_idx, label_idx] = temp
+						
+			#Compute trust and cont dims
+			for nn_idx in range(len(nn_list)):
+				kl = KneeLocator(dim_space, trust_dim_values[npoint_idx, split_idx, :,nn_idx], curve = "concave", direction = "increasing")
+				if kl.knee:
+					dim = kl.knee
+				else:
+					dim = np.nan
+				trust_dim[npoint_idx, split_idx, nn_idx] = dim
+
+				kl = KneeLocator(dim_space, cont_dim_values[npoint_idx, split_idx, :,nn_idx], curve = "concave", direction = "increasing")
+				if kl.knee:
+					dim = kl.knee
+				else:
+					dim = np.nan
+				cont_dim[npoint_idx, split_idx, nn_idx] = dim
+	
+		if verbose:
+			print(": Mean results: ")
+			print(f"\t\tInner dim: {np.nanmean(inner_dim[npoint_idx,:]):.2f} \u00B1 {np.nanstd(inner_dim[npoint_idx,:]):.2f}")	
+			print(f"\t\tTrust dim: {np.nanmean(trust_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanmean(trust_dim[npoint_idx,:,:]):.2f}")	
+			print(f"\t\tCont dim: {np.nanmean(cont_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanmean(cont_dim[npoint_idx,:,:]):.2f}")
+			print(f"\t\tsI: {np.nanmean(sI_values[npoint_idx,:,:,0]):.2f} \u00B1 {np.nanmean(sI_values[npoint_idx,:,:,0]):.2f}")
+ 
+	output_dict = {
+		'inner_dim':inner_dim,
+		'trust_dim': trust_dim,
+		'trust_dim_values': trust_dim_values,
+		'cont_dim': cont_dim,
+		'cont_dim_values': cont_dim_values,
+		'sI_values': sI_values,
+		'points_picked_list':points_picked_list,
+		'params': kwargs}
+
+	return output_dict

@@ -128,7 +128,6 @@ def plot_umap_nn_study(nn_dict, save_dir):
     
     return True
 
-#%% PARAMS
 #%% GENERAL PARAMS
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/nn'
 params = {
