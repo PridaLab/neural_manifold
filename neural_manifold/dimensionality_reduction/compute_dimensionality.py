@@ -271,7 +271,6 @@ def compute_umap_continuity_dim(base_signal = None, n_neigh= 0.01, max_dim=10, m
     else:
         return dim, num_cont
 
-
 @gu.check_inputs_for_pd
 def compute_isomap_resvar_dim(base_signal = None, n_neigh= 0.01, max_dim=10, return_emb = False, verbose = False):
     '''Compute dimensionality of data array according to isomap residual variance.

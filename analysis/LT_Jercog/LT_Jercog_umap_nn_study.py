@@ -10,7 +10,7 @@ Created on Fri Jun 17 19:37:56 2022
 import numpy as np
 from neural_manifold import general_utils as gu
 from neural_manifold import dimensionality_reduction as dim_red
-import pickle, os, copy
+import pickle, os, copy, sys
 
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -41,8 +41,8 @@ def plot_umap_nn_study(nn_dict, save_dir):
     sI_vmin_emb = np.inf
     sI_vmax_emb = 0
     
+    max_dim = 0
     R2s_vmin = 0
-    
     R2s_vmax = np.zeros((4,1))
     for file_idx, file_name in enumerate(fnames):
         sI_vmin_og = np.nanmin([sI_vmin_og, np.min(nn_dict[file_name]['sI_og'], axis= (0,1))])
@@ -54,6 +54,8 @@ def plot_umap_nn_study(nn_dict, save_dir):
         temp_R2s_vmax = np.nanmax(np.mean(nn_dict[file_name]['R2s'], axis=2), axis= (0,1)).reshape(-1,1)
         temp_R2s_vmax[temp_R2s_vmax>25] = 25
         R2s_vmax = np.nanmax(np.concatenate((R2s_vmax, temp_R2s_vmax),axis=1), axis=1).reshape(-1,1)
+        
+        max_dim = np.nanmax([max_dim, np.max(nn_dict[file_name]['trust_dim']), np.max(nn_dict[file_name]['cont_dim'])])
     
     dec_list = ['wf','wc','xgb','svm']
     
@@ -64,7 +66,7 @@ def plot_umap_nn_study(nn_dict, save_dir):
         xtick_labels = [str(entry) for entry in nn_dict[file_name]['params']['nn_list']]
         fig.text(0.008, 0.5, f"{file_name}",horizontalalignment='center', 
                          rotation = 'vertical', verticalalignment='center', fontsize = 20)
-        ax = plt.subplot(1,3,1)
+        ax = plt.subplot(1,4,1)
         ax.set_title("sI_og",fontsize=15)
         
         for l_idx, ln in enumerate(nn_dict[file_name]['params']['label_name']):
@@ -77,27 +79,37 @@ def plot_umap_nn_study(nn_dict, save_dir):
         ax.spines['right'].set_visible(False)
         ax.legend()    
             
-        ax = plt.subplot(1,3,2)
+        ax = plt.subplot(1,4,2)
+        
         b = ax.imshow(nn_dict[file_name]['sI_emb'][:,:,0], vmin = sI_vmin_emb, vmax = sI_vmax_emb, aspect = 'auto')
         ax.set_title(f"sI: {nn_dict[file_name]['params']['label_name'][0]}",fontsize=15)
         ax.set_xlabel('sI nn', labelpad = 5)
         ax.set_ylabel('nn', labelpad = -5)
         ax.set_yticks(np.arange(len(ytick_labels)), labels=ytick_labels)
-        ax.set_xticks(np.arange(len(ytick_labels)), labels=xtick_labels)
+        ax.set_xticks(np.arange(len(ytick_labels)), labels=xtick_labels, rotation= 90)
         fig.colorbar(b, ax=ax, location='right', anchor=(0, 0.3), shrink=1)
     
-        
+        ax = plt.subplot(1,4,3)
+        ax.plot(ytick_labels, nn_dict[file_name]['trust_dim'], c = cpal2[2], label = 'trust')
+        ax.plot(ytick_labels, nn_dict[file_name]['cont_dim'], c = cpal2[4], label = 'cont')
+        ax.set_xlabel('nn', labelpad = -2)
+        ax.set_ylabel('dim', labelpad = 5)
+        ax.set_ylim([0, max_dim])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend()    
+    
         for ii in range(4):
             if ii == 0:
-                pos = 5
+                pos = 7
             elif ii == 1:
-                pos = 6
+                pos = 8
             elif ii == 2:
-                pos = 11
+                pos = 15
             elif ii == 3:
-                pos = 12
+                pos = 16
     
-            ax = plt.subplot(2,6,pos)
+            ax = plt.subplot(2,8,pos)
             for l_idx, ln in enumerate(nn_dict[file_name]['params']['label_name']):
                 m = np.nanmean(nn_dict[file_name]['R2s'][:,:,l_idx,ii], axis=1)
                 sd = np.nanstd(nn_dict[file_name]['R2s'][:,:,l_idx,ii], axis=1)
@@ -140,6 +152,10 @@ params = {
 signal_name = 'ML_rates'
 label_names = ['posx']
 #%% M2019
+f = open(os.path.join(save_dir,'M2019_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2019 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -148,31 +164,27 @@ M2019 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2019_df_dict.pkl', verb
 
 fname_list = list(M2019.keys())
 M2019_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2019[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2019_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2019_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2019_umap_nn[fname]['params']['base_name'] = signal_name
+    M2019_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2019_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2019_umap_nn, save_ks)
     save_ks.close()
-    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()    
 _ = plot_umap_nn_study(M2019_umap_nn, save_dir)
 
 #%% M2021
+f = open(os.path.join(save_dir,'M2021_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2021 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -181,31 +193,28 @@ M2021 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2021_df_dict.pkl', verb
 
 fname_list = list(M2021.keys())
 M2021_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2021[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2021_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2021_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2021_umap_nn[fname]['params']['base_name'] = signal_name
+    M2021_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2021_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2021_umap_nn, save_ks)
     save_ks.close()
-    
+
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()    
 _ = plot_umap_nn_study(M2021_umap_nn, save_dir)
 
 #%% M2022
+f = open(os.path.join(save_dir,'M2022_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2022 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -214,31 +223,28 @@ M2022 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2022_df_dict.pkl', verb
 
 fname_list = list(M2022.keys())
 M2022_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2022[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2022_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2022_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2022_umap_nn[fname]['params']['base_name'] = signal_name
+    M2022_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2022_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2022_umap_nn, save_ks)
     save_ks.close()
-    
+
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()    
 _ = plot_umap_nn_study(M2022_umap_nn, save_dir)
 
 #%% M2023
+f = open(os.path.join(save_dir,'M2023_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2023 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -247,31 +253,28 @@ M2023 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2023_df_dict.pkl', verb
 
 fname_list = list(M2023.keys())
 M2023_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2023[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2023_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2023_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2023_umap_nn[fname]['params']['base_name'] = signal_name
+    M2023_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2023_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2023_umap_nn, save_ks)
     save_ks.close()
-    
+
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()    
 _ = plot_umap_nn_study(M2023_umap_nn, save_dir)
 
 #%% M2024
+f = open(os.path.join(save_dir,'M2024_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2024 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -280,31 +283,28 @@ M2024 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2024_df_dict.pkl', verb
 
 fname_list = list(M2024.keys())
 M2024_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2024[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2024_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2024_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2024_umap_nn[fname]['params']['base_name'] = signal_name
+    M2024_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2024_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2024_umap_nn, save_ks)
     save_ks.close()
     
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
 _ = plot_umap_nn_study(M2024_umap_nn, save_dir)
 
 #%% M2025
+f = open(os.path.join(save_dir,'M2025_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2025 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -313,31 +313,28 @@ M2025 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2025_df_dict.pkl', verb
 
 fname_list = list(M2025.keys())
 M2025_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2025[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2025_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2025_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2025_umap_nn[fname]['params']['base_name'] = signal_name
+    M2025_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2025_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2025_umap_nn, save_ks)
     save_ks.close()
-    
+
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
 _ = plot_umap_nn_study(M2025_umap_nn, save_dir)
 
 #%% M2026
+f = open(os.path.join(save_dir,'M2026_umap_nn_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+print(f"M2026 umap nn study: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 #load data
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
@@ -346,28 +343,21 @@ M2026 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2026_df_dict.pkl', verb
 
 fname_list = list(M2026.keys())
 M2026_umap_nn = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2026[fname])
     #compute hyperparameter study
-    m_sI_og, m_sI_emb, m_R2s, m_emb_list, m_params = dim_red.compute_umap_nn(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2026_umap_nn[fname] = {
-        'sI_og': m_sI_og,
-        'sI_emb': m_sI_emb,
-        'R2s': m_R2s,
-        'emb_list': m_emb_list,
-        'params': m_params
-        }
-    
+    M2026_umap_nn[fname] =  dim_red.compute_umap_nn(pd_object = pd_struct, base_signal = signal_name, 
+                                                    label_signal = label_names, trial_signal = "index_mat", **params)
+    M2026_umap_nn[fname]['params']['base_name'] = signal_name
+    M2026_umap_nn[fname]['params']['label_name'] = label_names
     save_ks = open(os.path.join(save_dir, "M2026_umap_nn_dict.pkl"), "wb")
     pickle.dump(M2026_umap_nn, save_ks)
     save_ks.close()
-    
+
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
 _ = plot_umap_nn_study(M2026_umap_nn, save_dir)
 
 #%% LOAD DATA

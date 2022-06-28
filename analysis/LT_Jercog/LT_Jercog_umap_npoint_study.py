@@ -9,7 +9,7 @@ Created on Thu Jun 23 11:42:23 2022
 import numpy as np
 from neural_manifold import general_utils as gu
 from neural_manifold import dimensionality_reduction as dim_red
-import pickle, os, copy
+import pickle, os, copy, sys
 
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -116,25 +116,29 @@ def plot_umap_npoint_study(npoints_dict, save_dir):
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
             
-    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_npoints_{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
+    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_npoints_{datetime.now().strftime('%d/%m/%y %H:%M:%S')}.html"),'w') as f:
         f.write(html)
     
     return True
 #%%
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/npoints'
-
 params = {
     'nn_list': [3, 10, 20, 30, 60, 120, 200],
-    'dim': 10,
+    'max_dim': 10,
     'verbose': True,
     'n_splits': 10
     }
 
 signal_name = 'ML_rates'
 label_names = ['posx']
-
 #%% M2019
 #load data
+f = open(os.path.join(save_dir,'M2019_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2019 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2019' in f]
@@ -142,8 +146,8 @@ M2019 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2019_df_dict.pkl', verb
 
 fname_list = list(M2019.keys())
 M2019_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2019[fname])
     
     M2019_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -156,11 +160,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2019_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2019_umap_npoints, save_ks)
     save_ks.close()
-
+      
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2019_umap_npoints, save_dir)
 
 #%% M2021
 #load data
+f = open(os.path.join(save_dir,'M2021_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2021 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2021' in f]
@@ -168,8 +181,8 @@ M2021 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2021_df_dict.pkl', verb
 
 fname_list = list(M2021.keys())
 M2021_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2021[fname])
     
     M2021_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -182,11 +195,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2021_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2021_umap_npoints, save_ks)
     save_ks.close()
-
+      
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")  
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2021_umap_npoints, save_dir)
 
 #%% M2022
 #load data
+f = open(os.path.join(save_dir,'M2022_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2022 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2022' in f]
@@ -194,8 +216,8 @@ M2022 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2022_df_dict.pkl', verb
 
 fname_list = list(M2022.keys())
 M2022_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2022[fname])
     
     M2022_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -208,11 +230,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2022_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2022_umap_npoints, save_ks)
     save_ks.close()
-
+    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2022_umap_npoints, save_dir)
 
 #%% M2023
 #load data
+f = open(os.path.join(save_dir,'M2023_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2023 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2023' in f]
@@ -220,8 +251,8 @@ M2023 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2023_df_dict.pkl', verb
 
 fname_list = list(M2023.keys())
 M2023_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2023[fname])
     
     M2023_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -234,11 +265,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2023_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2023_umap_npoints, save_ks)
     save_ks.close()
-
+    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2023_umap_npoints, save_dir)
 
 #%% M2024
 #load data
+f = open(os.path.join(save_dir,'M2024_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2024 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2024' in f]
@@ -246,8 +286,8 @@ M2024 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2024_df_dict.pkl', verb
 
 fname_list = list(M2024.keys())
 M2024_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2024[fname])
     
     M2024_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -260,11 +300,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2024_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2024_umap_npoints, save_ks)
     save_ks.close()
-
+    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2024_umap_npoints, save_dir)
 
 #%% M2025
 #load data
+f = open(os.path.join(save_dir,'M2025_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2025 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2025' in f]
@@ -272,8 +321,8 @@ M2025 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2025_df_dict.pkl', verb
 
 fname_list = list(M2025.keys())
 M2025_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2025[fname])
     
     M2025_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -286,11 +335,20 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2025_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2025_umap_npoints, save_ks)
     save_ks.close()
-
+    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2025_umap_npoints, save_dir)
 
 #%% M2026
 #load data
+f = open(os.path.join(save_dir,'M2026_umap_npoints_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2026 umap npoints: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2026' in f]
@@ -298,8 +356,8 @@ M2026 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2026_df_dict.pkl', verb
 
 fname_list = list(M2026.keys())
 M2026_umap_npoints = dict()
-for fname in fname_list:
-    print(f"\nWorking on session: {fname}")
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2026[fname])
     
     M2026_umap_npoints[fname] = dim_red.compute_umap_to_npoints(pd_object = pd_struct,base_signal = signal_name, 
@@ -312,5 +370,11 @@ for fname in fname_list:
     save_ks = open(os.path.join(save_dir, "M2026_umap_npoints_dict.pkl"), "wb")
     pickle.dump(M2026_umap_npoints, save_ks)
     save_ks.close()
-
+    
+    
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+sys.stdout = original
+f.close()
 _ = plot_umap_npoint_study(M2026_umap_npoints, save_dir)
+
+#%% LOAD DATA

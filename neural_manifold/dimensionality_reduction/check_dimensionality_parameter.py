@@ -170,6 +170,12 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 		dim = 10
 		kwargs['dim'] = dim
 
+	if 'max_dim' in kwargs:
+		max_dim = kwargs['max_dim']
+	else:
+		max_dim = 10
+		kwargs['max_dim'] = max_dim
+
 	if 'decoder_list' in kwargs:
 		decoder_list = kwargs['decoder_list']
 	else:
@@ -193,8 +199,13 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 	label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]    
 
 	sI_og = np.zeros((len(nn_list), len(label_list)))*np.nan
-	sI_emb = np.zeros((len(nn_list), len(nn_list), len(label_list)))
-	R2s_nn = np.zeros((len(nn_list), n_splits, len(label_list), len(decoder_list)))
+	trust_dim = np.zeros((len(nn_list)))*np.nan
+	trust_dim_val = np.zeros((len(nn_list),max_dim))*np.nan
+	cont_dim = np.zeros((len(nn_list)))*np.nan
+	cont_dim_val = np.zeros((len(nn_list),max_dim))*np.nan
+	sI_emb = np.zeros((len(nn_list), len(nn_list), len(label_list)))*np.nan
+	R2s_nn = np.zeros((len(nn_list), n_splits, len(label_list), len(decoder_list)))*np.nan
+
 	og_space = np.arange(base_signal.shape[1])
 	if verbose:
 		print("Computing sI in og space:")
@@ -202,7 +213,7 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 	for label_idx, label in enumerate(label_list):
 		label_lim = label_limits[label_idx]
 		if verbose:
-			print(f"\tSI {label_idx+1}/{len(label_list)}: X/X", end = '', sep = '')
+			print(f"\tsI {label_idx+1}/{len(label_list)}: X/X", end = '', sep = '')
 			pre_del = '\b\b\b'
 		if len(np.unique(label))<10:
 			nbins = len(np.unique(label))
@@ -223,6 +234,7 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 	for nn_idx, nn in enumerate(nn_list):
 		if verbose:
 			print(f"NN: {nn} ({nn_idx+1}/{len(nn_list)}):")
+		#0. Model
 		model = umap.UMAP(n_neighbors = nn, n_components =dim, min_dist=0.75)
 		if verbose:
 			print("\tFitting model...", sep= '', end = '')
@@ -230,7 +242,25 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 		emb_list.append(emb_signal)
 		if verbose:
 			print("Done")
+		#1. Trustworthiness dim
+		if verbose:
+			print("\tComputing trustworthiness dim...", sep= '', end = '')
+		dim, num_trust = compute_dim.compute_umap_trust_dim(base_signal, n_neigh = nn, max_dim = max_dim)
+		trust_dim[nn_idx] = dim
+		trust_dim_val[nn_idx, :len(num_trust)] = num_trust[:,0]
+		if verbose:
+			print(f"\b\b\b: {dim}")
 
+		#2. Continuity dim
+		if verbose:
+			print("\tComputing continuity dim...", sep= '', end = '')
+		dim, num_cont = compute_dim.compute_umap_continuity_dim(base_signal, n_neigh = nn, max_dim = max_dim)
+		cont_dim[nn_idx] = dim
+		cont_dim_val[nn_idx, :len(num_cont)] = num_cont[:,0]
+		if verbose:
+			print(f"\b\b\b: {dim}")
+
+		#3. sI
 		for label_idx, label in enumerate(label_list):
 			label_lim = label_limits[label_idx]
 			if verbose:
@@ -253,11 +283,23 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 
 		#1. Check decoder ability
 		R2s_temp, _ = dec.decoders_1D(x_base_signal=base_signal,y_signal_list=label_list,n_splits=n_splits, n_dims = dim,
-								emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=verbose)
+								nn = nn, emb_list = ['umap'],decoder_list = decoder_list, 
+								trial_signal=trial_signal,verbose=verbose)
 		for dec_idx, dec_name in enumerate(decoder_list):
 			R2s_nn[nn_idx,:, :,dec_idx] = R2s_temp['umap'][dec_name][:,:,0]
 
-	return sI_og, sI_emb, R2s_nn, emb_list, kwargs
+	output_dict = {
+		'sI_og': sI_og,
+		'trust_dim': trust_dim,
+		'trust_dim_val': trust_dim_val,
+		'cont_dim': cont_dim,
+		'cont_dim_val': cont_dim_val,
+		'sI_emb': sI_emb,
+		'R2s': R2s_nn,
+		'emb_list': emb_list,
+		'params':kwargs
+	}
+	return output_dict
 
 
 @gu.check_inputs_for_pd
@@ -374,14 +416,13 @@ def compute_umap_dim(base_signal=None, label_signal = None, trial_signal = None,
 		if verbose:
 			print("\tComputing R2s:")
 		R2s_temp, _ = dec.decoders_1D(x_base_signal=base_signal,y_signal_list=label_list,n_splits=n_splits, n_dims = dim+1,
-								emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=verbose)
+								nn = nn, emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=verbose)
 		for dec_idx, dec_name in enumerate(decoder_list):
 			R2s_dim[dim,:, :,dec_idx] = R2s_temp['umap'][dec_name][:,:,0]
 
 		if verbose:
 			print(f"\t\tMean result: {np.nanmean(R2s_dim[dim,:, :, :]):.2f}")	
 	return trust_dim, cont_dim, sI_dim, R2s_dim, kwargs
-
 
 
 def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, **kwargs):
@@ -779,7 +820,6 @@ def check_rotation_emb_quality(pd_struct_pre, pd_struct_rot, signal_field,label_
 	return sI_dim, trust_dim, cont_dim, kwargs
 
 
-
 @gu.check_inputs_for_pd
 def compute_umap_to_npoints(base_signal=None, label_signal = None, **kwargs):
 	import warnings
@@ -831,6 +871,7 @@ def compute_umap_to_npoints(base_signal=None, label_signal = None, **kwargs):
 		n_splits = kwargs['n_splits']
 	else:
 		n_splits = 10
+		kwargs['n_splits'] = n_splits
 
 	if 'verbose' in kwargs:
 		verbose = kwargs['verbose']
@@ -937,9 +978,9 @@ def compute_umap_to_npoints(base_signal=None, label_signal = None, **kwargs):
 		if verbose:
 			print(": Mean results: ")
 			print(f"\t\tInner dim: {np.nanmean(inner_dim[npoint_idx,:]):.2f} \u00B1 {np.nanstd(inner_dim[npoint_idx,:]):.2f}")	
-			print(f"\t\tTrust dim: {np.nanmean(trust_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanmean(trust_dim[npoint_idx,:,:]):.2f}")	
-			print(f"\t\tCont dim: {np.nanmean(cont_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanmean(cont_dim[npoint_idx,:,:]):.2f}")
-			print(f"\t\tsI: {np.nanmean(sI_values[npoint_idx,:,:,0]):.2f} \u00B1 {np.nanmean(sI_values[npoint_idx,:,:,0]):.2f}")
+			print(f"\t\tTrust dim: {np.nanmean(trust_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanstd(trust_dim[npoint_idx,:,:]):.2f}")	
+			print(f"\t\tCont dim: {np.nanmean(cont_dim[npoint_idx,:,:]):.2f} \u00B1 {np.nanstd(cont_dim[npoint_idx,:,:]):.2f}")
+			print(f"\t\tsI: {np.nanmean(sI_values[npoint_idx,:,:,0]):.2f} \u00B1 {np.nanstd(sI_values[npoint_idx,:,:,0]):.2f}")
  
 	output_dict = {
 		'inner_dim':inner_dim,
@@ -949,6 +990,201 @@ def compute_umap_to_npoints(base_signal=None, label_signal = None, **kwargs):
 		'cont_dim_values': cont_dim_values,
 		'sI_values': sI_values,
 		'points_picked_list':points_picked_list,
+		'params': kwargs}
+
+	return output_dict
+
+
+@gu.check_inputs_for_pd
+def compute_umap_to_ncells(base_signal=None, label_signal = None,trial_signal = None, **kwargs):
+	import warnings
+	warnings.filterwarnings("ignore")
+
+	if 'nn_list' in kwargs:
+		nn_list = kwargs['nn_list']
+	else:
+		nn_list = [3, 10, 20, 30, 60, 100, 200]
+		kwargs['nn_list'] = nn_list
+
+	if 'min_dist' in kwargs:
+		min_dist = kwargs['min_dist']
+	else:
+		min_dist = 0.75
+		kwargs['min_dist'] = min_dist
+
+	if 'nn' in kwargs:
+		nn = kwargs['nn']
+	else:
+		nn = 60
+		kwargs['nn'] = nn
+
+	if 'max_dim' in kwargs:
+		max_dim = kwargs['max_dim']
+	else:
+		max_dim = 12
+		kwargs['max_dim'] = max_dim
+
+	if 'min_cells' in kwargs:
+		min_cells = kwargs['min_cells']
+	else:
+		min_cells = 5
+		kwargs['min_cells'] = min_cells
+
+	if 'max_cells' in kwargs:
+		max_cells = kwargs['max_cells']
+	else:
+		max_cells = 200
+		kwargs['max_cells'] = max_cells
+
+	if 'n_steps' in kwargs:
+		n_steps = kwargs['n_steps']
+	else:
+		n_steps = 10
+		kwargs['n_steps'] = n_steps
+
+	if 'n_splits' in kwargs:
+		n_splits = kwargs['n_splits']
+	else:
+		n_splits = 10
+		kwargs['n_splits'] = n_splits
+
+	if 'n_folds' in kwargs:
+		n_folds = kwargs['n_folds']
+	else:
+		n_folds = 5
+		kwargs['n_folds'] = n_folds
+
+	if 'decoder_list' in kwargs:
+		decoder_list = kwargs['decoder_list']
+	else:
+		decoder_list = ["wf", "wc", "xgb", "svr"]
+
+	if 'verbose' in kwargs:
+		verbose = kwargs['verbose']
+	else:
+		verbose = False
+		kwargs['verbose'] = verbose
+
+	#get cell_list containing the number of points to be included on each iteration
+	num_cells = base_signal.shape[1]
+	cell_list = np.unique(np.logspace(np.log10(min_cells), np.log10(max_cells),n_steps,dtype=int))
+	kwargs["og_num_cells"] = cell_list
+	cell_list = cell_list[cell_list<=num_cells]
+	kwargs["cell_list"] = cell_list
+
+	label_list = list()
+	for label in label_signal:
+		if label.ndim == 2:
+			label = label[:,0]
+		label_list.append(label)
+	label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]
+
+	cells_picked_list = np.zeros((n_steps,n_splits,num_cells)).astype(bool)
+
+	inner_dim = np.zeros((n_steps, n_splits))*np.nan
+	inner_dim_radii_vs_nn = np.zeros((n_steps, n_splits, 1000, 2))*np.nan
+
+	trust_dim = np.zeros((n_steps, n_splits,len(nn_list)))*np.nan
+	trust_dim_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list)))*np.nan
+
+	cont_dim = np.zeros((n_steps, n_splits,len(nn_list)))*np.nan
+	cont_dim_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list)))*np.nan
+
+	sI_values = np.zeros((n_steps, n_splits, max_dim,len(nn_list), len(label_list)))*np.nan
+	R2s_values = np.zeros((n_steps, n_splits, n_folds, len(label_list), len(decoder_list)))*np.nan
+
+	#Iterate over each one
+	dim_space = np.linspace(1,max_dim, max_dim).astype(int)
+	for ncell_idx, ncell_val in enumerate(cell_list):
+		if verbose:
+			print(f"Checking number of cells: {ncell_val} ({ncell_idx+1}/{n_steps}):")
+			print("\tIteration X/X", sep= '', end = '')
+			pre_del = '\b\b\b'
+
+		for split_idx in range(n_splits):
+			if verbose:
+				print(pre_del, f"{split_idx+1}/{n_splits}", sep = '', end = '')
+				pre_del = (len(str(split_idx+1))+len(str(n_splits))+1)*'\b'
+
+			cells_picked = random.sample(list(np.arange(num_cells).astype(int)), ncell_val)
+			cells_picked_list[ncell_idx, split_idx, cells_picked] = True 
+			it_signal = copy.deepcopy(base_signal[:, cells_picked])
+
+			#1. Inner dim
+			m , radius, neigh = compute_dim.compute_inner_dim(it_signal)
+			inner_dim[ncell_idx, split_idx] = m
+			inner_dim_radii_vs_nn[ncell_idx, split_idx, :radius.shape[0],:] = np.hstack((radius, neigh))
+
+			base_signal_indices = dim_validation.compute_rank_indices(it_signal)
+
+			for dim in range(max_dim):
+				#0. Model
+				emb_space = np.arange(dim+1)
+				model = umap.UMAP(n_neighbors = nn, n_components =dim+1, min_dist=0.75)
+				emb_signal = model.fit_transform(it_signal)
+
+				#1. Compute trustworthiness
+				temp = dim_validation.trustworthiness_vector(it_signal, emb_signal ,nn_list[-1], indices_source = base_signal_indices)
+				trust_dim_values[ncell_idx, split_idx, dim,:] = temp[nn_list]
+
+				#2. Compute continuity
+				temp = dim_validation.continuity_vector(it_signal, emb_signal ,nn_list[-1])
+				cont_dim_values[ncell_idx, split_idx, dim,:] = temp[nn_list]
+
+				#3. Compute sI
+				for label_idx, label in enumerate(label_list):
+					label_lim = label_limits[label_idx]
+					if len(np.unique(label))<10:
+						nbins = len(np.unique(label))
+					else:
+						nbins = 10
+					for sI_nn_idx, sI_nn in enumerate(nn_list):
+						try:
+							temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
+																				vmin=label_lim[0], vmax=label_lim[1])
+						except:
+							temp = np.nan
+						sI_values[ncell_idx,split_idx,dim,sI_nn_idx, label_idx] = temp
+						
+			#Compute trust and cont dims
+			for nn_idx in range(len(nn_list)):
+				kl = KneeLocator(dim_space, trust_dim_values[ncell_idx, split_idx, :,nn_idx], curve = "concave", direction = "increasing")
+				if kl.knee:
+					dim = kl.knee
+				else:
+					dim = np.nan
+				trust_dim[ncell_idx, split_idx, nn_idx] = dim
+
+				kl = KneeLocator(dim_space, cont_dim_values[ncell_idx, split_idx, :,nn_idx], curve = "concave", direction = "increasing")
+				if kl.knee:
+					dim = kl.knee
+				else:
+					dim = np.nan
+				cont_dim[ncell_idx, split_idx, nn_idx] = dim
+			#Compute R2s
+			R2s_temp, _ = dec.decoders_1D(x_base_signal=it_signal,y_signal_list=label_list,n_splits=n_folds, n_dims = 3, nn = nn,
+								emb_list = ['umap'] ,decoder_list = decoder_list, trial_signal=trial_signal,verbose=False)
+
+			for dec_idx, dec_name in enumerate(decoder_list):
+				R2s_values[ncell_idx,split_idx, :,:,dec_idx] = R2s_temp['umap'][dec_name][:,:,0]
+
+		if verbose:
+			print(": Mean results: ")
+			print(f"\t\tInner dim: {np.nanmean(inner_dim[ncell_idx,:]):.2f} \u00B1 {np.nanstd(inner_dim[ncell_idx,:]):.2f}")	
+			print(f"\t\tTrust dim: {np.nanmean(trust_dim[ncell_idx,:,:]):.2f} \u00B1 {np.nanstd(trust_dim[ncell_idx,:,:]):.2f}")	
+			print(f"\t\tCont dim: {np.nanmean(cont_dim[ncell_idx,:,:]):.2f} \u00B1 {np.nanstd(cont_dim[ncell_idx,:,:]):.2f}")
+			print(f"\t\tsI: {np.nanmean(sI_values[ncell_idx,:,:,0]):.2f} \u00B1 {np.nanstd(sI_values[ncell_idx,:,:,0]):.2f}")
+			print(f"\t\tR2s xgb: {np.nanmean(R2s_values[ncell_idx,:,:,0,2]):.2f} \u00B1 {np.nanstd(R2s_values[ncell_idx,:,:,0,2]):.2f}")
+
+	output_dict = {
+		'inner_dim':inner_dim,
+		'trust_dim': trust_dim,
+		'trust_dim_values': trust_dim_values,
+		'cont_dim': cont_dim,
+		'cont_dim_values': cont_dim_values,
+		'sI_values': sI_values,
+		'R2s_values': R2s_values,
+		'cells_picked_list':cells_picked_list,
 		'params': kwargs}
 
 	return output_dict

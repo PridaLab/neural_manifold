@@ -401,3 +401,5 @@ if "M2025_umap_dim" not in locals():
     M2025_umap_dim = gu.load_files(save_dir, '*M2025_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2026_umap_dim" not in locals():
     M2026_umap_dim = gu.load_files(save_dir, '*M2026_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
+    
+#%%
