@@ -23,7 +23,7 @@ warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-da
                                                                #https://stackoverflow.com/questions/67225016/warning-occuring-in-xgboost
 
 @gu.check_inputs_for_pd
-def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [],
+def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = None,
                     trial_signal = None, decoder_list = ["wf", "wc", "xgb", "svr"],
                     n_dims = 10, n_splits=10, verbose = False):  
     
@@ -153,10 +153,13 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [],
         #compute embeddings
         for emb in emb_list:
             if 'umap' in emb:
-                n_neighbours = np.round(X_base_train.shape[0]*0.01).astype(int)
-                model = umap.UMAP(n_neighbors = n_neighbours, n_components =n_dims, min_dist=0.75)
+                if isinstance(nn, type(None)):
+                    nn = np.round(X_base_train.shape[0]*0.01).astype(int)
+                model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=0.75)
             elif 'iso' in emb:
-                model = Isomap(n_neighbors = 15,n_components = n_dims)
+                if isinstance(nn, type(None)):
+                    nn = np.round(X_base_train.shape[0]*0.01).astype(int)
+                model = Isomap(n_neighbors = nn,n_components = n_dims)
             elif 'pca' in emb:
                 model = PCA(n_dims)
             X_signal_train = model.fit_transform(X_base_train)
