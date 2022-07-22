@@ -458,7 +458,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 		kwargs['verbose'] = verbose
 	kwargs["signal_field"] = signal_field
 	sI_nn = np.zeros((len(nn_list), 2, len(sI_nn_list), n_iter))
-	angle_nn = np.zeros((len(nn_list), 4, n_iter))
+	angle_nn = np.zeros((len(nn_list), 5, n_iter))
 
 	if 'dir_mat' not in pd_struct_pre.columns:
 		pd_struct_pre["dir_mat"] = [np.zeros((pd_struct_pre["pos"][idx].shape[0],1)).astype(int)+
@@ -551,8 +551,17 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 				if abs(tr)>1:
 					tr = np.nan
 			angle_nn[nn_idx, 3, ite] = math.acos(tr)*180/np.pi
+
+			TAB, RAB = dec.align_manifolds_1D(emb_p, emb_r, pos_p[:,0], pos_r[:,0], ndims = dim, nCentroids = 3)
+			tr = (np.trace(RAB)-1)/2
+			if abs(tr)>1:
+				tr = round(tr,2)
+				if abs(tr)>1:
+					tr = np.nan
+			angle_nn[nn_idx, 4, ite] = math.acos(tr)*180/np.pi
+
 			if verbose:
-				print(f"\b\b\b: {angle_nn[nn_idx, 3, ite]:.2f}º - Done")
+				print(f"\b\b\b: {angle_nn[nn_idx, 3, ite]:.2f}º ({angle_nn[nn_idx, 4, ite]:.2f}º) - Done")
 
 		fig= plt.figure(figsize = (12, 3))
 
@@ -573,7 +582,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 
 		ax = plt.subplot(1,4,3, projection='3d')
 		ax.scatter(*emb_r[:,:3].T, c=dir_mat_r[:,0])
-		ax.set_title(f"Rot angle: {np.nanmean(angle_nn[nn_idx, 3, :]):.2f}")
+		ax.set_title(f"Rot angle: {np.nanmean(angle_nn[nn_idx, 3, :]):.2f} ({np.nanmean(angle_nn[nn_idx, 4, :]):.2f})")
 		ax.set_xlabel('Dim 1', labelpad= -8)
 		ax.set_ylabel('Dim 2', labelpad= -8)
 		ax.set_zlabel('Dim 3', labelpad= -8)
