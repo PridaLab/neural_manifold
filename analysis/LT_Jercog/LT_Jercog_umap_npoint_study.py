@@ -46,10 +46,13 @@ def plot_umap_npoint_study(npoints_dict, save_dir):
         sI_vmin = np.nanmin([sI_vmin, np.min(npoints_dict[file_name]['sI_values'])])
         sI_vmax = np.nanmax([sI_vmax, np.max(npoints_dict[file_name]['sI_values'])])
         
-        trust_dmax = np.nanmax([trust_dmax, np.max(npoints_dict[file_name]['trust_dim'])])
-        cont_dmax = np.nanmax([cont_dmax, np.max(npoints_dict[file_name]['cont_dim'])])
+        trust_dmax = np.nanmax([trust_dmax, np.nanmax(npoints_dict[file_name]['trust_dim'])])
+        cont_dmax = np.nanmax([cont_dmax, np.nanmax(npoints_dict[file_name]['cont_dim'])])
         
-    
+    if trust_dmax<1:
+        trust_dmax= 6
+    if cont_dmax<1:
+        cont_dmax= 6
     for file_idx, file_name in enumerate(fnames):
 
         fig= plt.figure(figsize = (16, 4))
@@ -104,7 +107,7 @@ def plot_umap_npoint_study(npoints_dict, save_dir):
         ax.fill_between(np.arange(len(m)), m-sd, m+sd, color = cpal[0], alpha = 0.3)
         ax.set_xlabel('# points', labelpad = -2)
         ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
-        ax.set_ylim([0, np.max(m)+1])
+        ax.set_ylim([0, np.nanmax(m)+1])
         ax.set_ylabel('inner dim', labelpad = 0)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -116,7 +119,7 @@ def plot_umap_npoint_study(npoints_dict, save_dir):
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
             
-    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_npoints_{datetime.now().strftime('%d/%m/%y %H:%M:%S')}.html"),'w') as f:
+    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_npoints_{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
     
     return True
@@ -378,3 +381,163 @@ f.close()
 _ = plot_umap_npoint_study(M2026_umap_npoints, save_dir)
 
 #%% LOAD DATA
+if "M2019_umap_npoints" not in locals():
+    M2019_umap_npoints = gu.load_files(save_dir, '*M2019_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2021_umap_npoints" not in locals():
+    M2021_umap_npoints = gu.load_files(save_dir, '*M2021_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2023_umap_npoints" not in locals():
+    M2023_umap_npoints = gu.load_files(save_dir, '*M2023_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2024_umap_npoints" not in locals():
+    M2024_umap_npoints = gu.load_files(save_dir, '*M2024_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
+    
+    
+if "M2025_umap_npoints" not in locals():
+    M2025_umap_npoints = gu.load_files(save_dir, '*M2025_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
+if "M2026_umap_npoints" not in locals():
+    M2026_umap_npoints = gu.load_files(save_dir, '*M2026_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
+
+#%%
+from kneed import KneeLocator
+
+def get_npoints_params(npoints_dict, session_list):
+    nn_list = npoints_dict[list(npoints_dict.keys())[0]]["params"]["nn_list"]
+    max_dim = npoints_dict[list(npoints_dict.keys())[0]]["params"]["max_dim"]
+    point_list = npoints_dict[list(npoints_dict.keys())[0]]["params"]["og_point_list"]
+    final_point_list = npoints_dict[list(npoints_dict.keys())[0]]["params"]["point_list"]
+    
+    tcont_val = np.zeros((len(point_list),max_dim, len(nn_list),3, 5))*np.nan
+    ttrust_val = np.zeros((len(point_list),max_dim, len(nn_list),3, 5))*np.nan
+    
+    tcont_dim = np.zeros((len(point_list),len(nn_list),3, 5))*np.nan
+    ttrust_dim = np.zeros((len(point_list),len(nn_list),3, 5))*np.nan
+    meanh_dim = np.zeros((len(point_list),len(nn_list),3, 5))*np.nan
+    
+    tsI = np.zeros((len(point_list),max_dim, len(nn_list),3, 5))*np.nan
+    
+    fnames = list(npoints_dict.keys())
+    last_idx = -1
+    for s_idx, s_name in enumerate(fnames):
+        if s_idx==0:
+            last_idx+=1
+            count_idx = 0
+        else:
+            old_s_name = fnames[s_idx-1]
+            old_s_name = old_s_name[:old_s_name.find('_',-5)]
+            new_s_name = s_name[:s_name.find('_',-5)]
+            if new_s_name == old_s_name:
+                count_idx += 1
+            else:
+                last_idx +=1
+                count_idx = 0
+                
+        pd_struct = npoints_dict[s_name]
+        tcont_dim[:,:,count_idx, session_list[last_idx]] = np.nanmean(pd_struct["cont_dim"],axis=1)
+        ttrust_dim[:,:,count_idx, session_list[last_idx]] = np.nanmean(pd_struct["trust_dim"],axis=1)
+        
+        tcont_val[:,:,:,count_idx,session_list[last_idx]] = np.nanmean(pd_struct["cont_dim_values"],axis=1)
+        ttrust_val[:,:,:,count_idx,session_list[last_idx]] = np.nanmean(pd_struct["trust_dim_values"],axis=1)
+        
+        for pts in range(len(final_point_list)):
+            for nn in range(len(nn_list)):
+                cont_val = np.nanmean(pd_struct["cont_dim_values"][pts,:,:,nn],axis=0)
+                trust_val = np.nanmean(pd_struct["trust_dim_values"][pts,:,:,nn],axis=0)
+                
+                val = (2*trust_val*cont_val)/(trust_val+cont_val)
+                kl = KneeLocator(np.arange(max_dim)+1, val, curve = "concave", direction = "increasing")
+                if kl.knee:
+                    meanh_dim[pts,nn,count_idx, session_list[last_idx]] = kl.knee
+    
+     
+                
+        tsI[:,:,:,count_idx,session_list[last_idx]] = np.nanmean(pd_struct["sI_values"], axis = 1)[:,:,:,0]
+        
+    return np.nanmean(tcont_val,axis=-2), np.nanmean(tcont_dim,axis=-2), np.nanmean(ttrust_val,axis=-2),np.nanmean(ttrust_dim,axis=-2),np.nanmean(meanh_dim,axis=-2),np.nanmean(tsI,axis=-2)
+
+
+#%%
+
+nn_list = M2019_umap_npoints[list(M2019_umap_npoints.keys())[0]]["params"]["nn_list"]
+max_dim = M2019_umap_npoints[list(M2019_umap_npoints.keys())[0]]["params"]["max_dim"]
+point_list = M2019_umap_npoints[list(M2019_umap_npoints.keys())[0]]["params"]["og_point_list"]
+
+cont = np.zeros((len(point_list),max_dim,len(nn_list),5,6))*np.nan
+cont_dim = np.zeros((len(point_list),len(nn_list),5,6))*np.nan
+
+trust = np.zeros((len(point_list),max_dim,len(nn_list),5,6))*np.nan
+trust_dim = np.zeros((len(point_list),len(nn_list),5,6))*np.nan
+
+meanh_dim = np.zeros((len(point_list),len(nn_list),5,6))*np.nan
+
+sI_val = np.zeros((len(point_list),max_dim, len(nn_list), 5,6))*np.nan
+
+#M2019
+cont[:,:,:,:,0], cont_dim[:,:,:,0],trust[:,:,:,:,0], trust_dim[:,:,:,0], meanh_dim[:,:,:,0], sI_val[:,:,:,:,0] = get_npoints_params(M2019_umap_npoints, [0,1,2,4])
+#M2021
+cont[:,:,:,:,1], cont_dim[:,:,:,1],trust[:,:,:,:,1], trust_dim[:,:,:,1], meanh_dim[:,:,:,1], sI_val[:,:,:,:,1] = get_npoints_params(M2021_umap_npoints, [0,1,2,4])
+#M2023
+cont[:,:,:,:,2], cont_dim[:,:,:,2],trust[:,:,:,:,2], trust_dim[:,:,:,2], meanh_dim[:,:,:,2], sI_val[:,:,:,:,2] = get_npoints_params(M2023_umap_npoints, [0,1,2,4])
+#M2024
+cont[:,:,:,:,3], cont_dim[:,:,:,3],trust[:,:,:,:,3], trust_dim[:,:,:,3], meanh_dim[:,:,:,3], sI_val[:,:,:,:,3] = get_npoints_params(M2024_umap_npoints, [0,1,2,3])
+#M2025
+#cont[:,:,:,:,4], cont_dim[:,:,:,4],trust[:,:,:,:,4], trust_dim[:,:,:,4], meanh_dim[:,:,:,4], sI[:,:,:,:,4] = get_npoints_params(M2025_umap_npoints, [0,1,2,3])
+#M2026
+#cont[:,:,:,:,5], cont_dim[:,:,:,5],trust[:,:,:,:,5], trust_dim[:,:,:,5], meanh_dim[:,:,:,5], sI[:,:,:,:,5] = get_npoints_params(M2026_umap_npoints, [0,1,2,3])
+
+#%%
+nns = 1
+cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500", "#EE90FC"]
+
+#%%
+pd_npoints = pd.DataFrame(data={'Points': [str(pts) for pts in point_list]*(trust_dim.shape[-1]*trust_dim.shape[-2])*3,
+                                 'Measurement': ['trustworthiness']*(trust_dim.shape[-1]*trust_dim.shape[-2]*trust_dim.shape[0]) + 
+                                 ['continuity']*(cont_dim.shape[-1]*cont_dim.shape[-2]*cont_dim.shape[0]) +
+                                 ['harmonic_mean']*(meanh_dim.shape[-1]*meanh_dim.shape[-2]*meanh_dim.shape[0]),
+                                 'Index': np.concatenate((trust_dim[:,nns,:,:].T.reshape(-1,1).T, cont_dim[:,nns,:,:].T.reshape(-1,1).T, meanh_dim[:,nns,:,:].T.reshape(-1,1).T), axis = 1)[0,:]})
+
+
+dim_space = np.arange(9)
+
+#%%
+fig = plt.figure(figsize=(15,8))
+
+ax = plt.subplot(1,2,1)
+m = np.nanmean(sI_val[:8,2,nns,:,:], axis = (-2,-1))
+sd = np.nanstd(sI_val[:8,2,nns,:,:], axis = (-2,-1))
+ax.plot(point_list[:8], m, color = cpal[0])
+ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[0], alpha=0.3)
+ax.set_ylim([0.245, 1.05])
+ax.set_ylabel('Structure Index (x-pos)', size=12)
+ax.set_xlabel('Number of points', size=12)
+
+
+ax = plt.subplot(1,2,2)
+m = np.nanmean(trust_dim[:8,nns,:,:], axis = (-2,-1))
+sd = np.nanstd(trust_dim[:8,nns,:,:], axis = (-2,-1))
+ax.plot(point_list[:8], m, color = cpal[1], label = 'trust')
+ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[1], alpha=0.3)
+
+m = np.nanmean(cont_dim[:8,nns,:,:], axis = (-2,-1))
+sd = np.nanstd(cont_dim[:8,nns,:,:], axis = (-2,-1))
+ax.plot(point_list[:8], m, color = cpal[4], label = 'cont')
+ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[4], alpha=0.3)
+
+m = np.nanmean(meanh_dim[:8,nns,:,:], axis = (-2,-1))
+sd = np.nanstd(meanh_dim[:8,nns,:,:], axis = (-2,-1))
+ax.plot(point_list[:8], m, color = cpal[-1], label = 'HM')
+ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[-1], alpha=0.3)
+
+ax.set_yticks([0,1,2,3,4])
+ax.set_ylim([0,4.5])
+ax.set_ylabel('Dimensionality', size=12)
+ax.set_xlabel('Number of points', size=12)
+
+ax.legend()
+
+#%%
+ax = plt.subplot(1,3,3)
+sns.barplot(ax=ax, x='Points', y='Index', hue = 'Measurement', data = pd_npoints)
+ax.set_ylabel('Estimated dimension', size=12)
+ax.axhline(y=3, color='k', linestyle= '--')
+ax.set_yticks([0,1,2,3,4])
+ax.set_ylim([0,4.5])
+ax.set_xlabel('Day')

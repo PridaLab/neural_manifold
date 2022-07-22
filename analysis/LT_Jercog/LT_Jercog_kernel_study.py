@@ -39,7 +39,7 @@ def plot_kernel_study(kernel_dict, save_dir):
     html = html + 'h2 {text-align: center;}\n'
     html = html + 'img {display: block; width: 80%; margin-left: auto; margin-right: auto;}'
     html = html + '</style>\n'
-    html = html + f"<h1>Kernel study - {fnames[0][:3]}</h1>\n<br>\n"    #Add title
+    html = html + f"<h1>Kernel study - {fnames[0][:5]}</h1>\n<br>\n"    #Add title
     html = html + f"<h2>traces: {kernel_dict[fnames[0]]['params']['traces_field']} - "
     html = html + f"spikes: {kernel_dict[fnames[0]]['params']['spikes_field']} - "
     html = html + f"<br>{datetime.now().strftime('%d/%m/%y %H:%M:%S')}</h2><br>\n"    #Add subtitle
@@ -141,7 +141,7 @@ def plot_kernel_study(kernel_dict, save_dir):
     
     return True
 #%% GENERAL PARAMS
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/kernel_study'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/events/kernel_study'
 params = {
     'ks_list':[0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,2,5,10,np.inf],
     'assymetry_list':[False, True],
@@ -149,7 +149,7 @@ params = {
     'verbose': True,
     'vel_th': 2
     }
-spikes_field = 'ML_spikes'
+spikes_field = 'th_spikes'
 traces_field = 'deconvProb'
 
 save_params = {}
@@ -208,6 +208,7 @@ for fname in fname_list:
 _ = plot_kernel_study(M2021_kernel_study, save_dir)
 
 #%% M2022
+'''
 #load data
 file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2022'
 M2022 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
@@ -232,7 +233,7 @@ for fname in fname_list:
     save_ks.close()
 
 _ = plot_kernel_study(M2022_kernel_study, save_dir)
-
+'''
 #%% M2023
 #load data
 file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2023'

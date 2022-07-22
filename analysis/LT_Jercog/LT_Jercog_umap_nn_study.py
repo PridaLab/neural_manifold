@@ -141,7 +141,7 @@ def plot_umap_nn_study(nn_dict, save_dir):
     return True
 
 #%% GENERAL PARAMS
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/nn'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/nn'
 params = {
     'nn_list': [3, 10, 20, 30, 60, 120, 200, 500, 1000],
     'dim': 5,
@@ -149,7 +149,7 @@ params = {
     'n_splits': 5
     }
 
-signal_name = 'ML_rates'
+signal_name = 'deconvProb'
 label_names = ['posx']
 #%% M2019
 f = open(os.path.join(save_dir,'M2019_umap_nn_logFile.txt'), 'w')
@@ -444,7 +444,7 @@ dec_name = ["wf", "wc", "xgb", "svm"]
 #%%
 cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
 nn_list = M2019_umap_nn[list(M2019_umap_nn.keys())[0]]["params"]["nn_list"]
-R2s_vmax = 25
+R2s_vmax = 40
 dec_name = ["wf", "wc", "xgb", "svm"]
 
 plt.figure(figsize=(10.7,3.7))
@@ -562,3 +562,5 @@ ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
 plt.tight_layout()
+plt.savefig(os.path.join(save_dir,'LT_Jercog_umap_nn_study_2.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(save_dir,'LT_Jercog_umap_nn_study_2.png'), dpi = 400,bbox_inches="tight")

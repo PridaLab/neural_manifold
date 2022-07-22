@@ -60,7 +60,7 @@ def plot_umap_ncell_study(ncells_dict, save_dir):
         fig= plt.figure(figsize = (16, 4))
         ytick_labels = [str(entry) for entry in ncells_dict[file_name]['params']['nn_list']]
         xtick_labels =[str(entry) for entry in ncells_dict[file_name]['params']['og_num_cells']]
-        
+        num_cells = ncells_dict[file_name]['params']['og_num_cells']
         fig.text(0.008, 0.5, f"{file_name}",horizontalalignment='center', 
                          rotation = 'vertical', verticalalignment='center', fontsize = 20)
         
@@ -77,23 +77,23 @@ def plot_umap_ncell_study(ncells_dict, save_dir):
         ax = plt.subplot(1,3,2)
         trust_m = np.nanmean(ncells_dict[file_name]['trust_dim'], axis = (2,1))
         trust_sd = np.nanstd(ncells_dict[file_name]['trust_dim'], axis = (2,1))
-        ax.plot(trust_m, c = cpal[2], label = 'trust')
-        ax.fill_between(np.arange(len(trust_m)), trust_m-trust_sd, trust_m+trust_sd, color = cpal[2], alpha = 0.3)
+        ax.plot(num_cells,trust_m, c = cpal[2], label = 'trust')
+        ax.fill_between(num_cells, trust_m-trust_sd, trust_m+trust_sd, color = cpal[2], alpha = 0.3)
         
         cont_m = np.nanmean(ncells_dict[file_name]['cont_dim'], axis = (2,1))
         cont_sd = np.nanstd(ncells_dict[file_name]['cont_dim'], axis = (2,1))
-        ax.plot(cont_m, c = cpal[4], label = 'cont')
-        ax.fill_between(np.arange(len(cont_m)), cont_m-cont_sd, cont_m+cont_sd, color = cpal[4], alpha = 0.3)
+        ax.plot(num_cells,cont_m, c = cpal[4], label = 'cont')
+        ax.fill_between(num_cells, cont_m-cont_sd, cont_m+cont_sd, color = cpal[4], alpha = 0.3)
         
         inner_m = np.nanmean(ncells_dict[file_name]['inner_dim'], axis = 1)
         inner_sd = np.nanstd(ncells_dict[file_name]['inner_dim'], axis = 1)
-        ax.plot(inner_m, c = cpal[0], label = 'inner_dim')
-        ax.fill_between(np.arange(len(inner_m)), inner_m-inner_sd, inner_m+inner_sd, color = cpal[0], alpha = 0.3)
+        ax.plot(num_cells,inner_m, c = cpal[0], label = 'inner_dim')
+        ax.fill_between(num_cells, inner_m-inner_sd, inner_m+inner_sd, color = cpal[0], alpha = 0.3)
         
     
         ax.set_xlabel('# cells', labelpad = -2)
-        ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
-        ax.set_ylim([0, trust_dmax])
+        #ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
+        ax.set_ylim([0, 5])
         ax.set_ylabel('dim', labelpad = 0)
         ax.legend()
         ax.spines['top'].set_visible(False)
@@ -111,14 +111,14 @@ def plot_umap_ncell_study(ncells_dict, save_dir):
                 
             ax = plt.subplot(2,6,pos)
             for l_idx, ln in enumerate(ncells_dict[file_name]['params']['label_name']):
-                m = np.nanmean(ncells_dict[file_name]['R2s'][:,:,:,l_idx,ii], axis=(1,2))
-                sd = np.nanstd(ncells_dict[file_name]['R2s'][:,:,:,l_idx,ii], axis=(1,2))
+                m = np.nanmean(ncells_dict[file_name]['R2s_values'][:,:,:,l_idx,ii], axis=(1,2))
+                sd = np.nanstd(ncells_dict[file_name]['R2s_values'][:,:,:,l_idx,ii], axis=(1,2))
                 
-                ax.plot(m, c = cpal[2], label = ln)
-                ax.fill_between(np.arange(len(m)), m-sd, m+sd, color = cpal[2], alpha = 0.3)
+                ax.plot(num_cells,m, c = cpal[2], label = ln)
+                ax.fill_between(num_cells, m-sd, m+sd, color = cpal[2], alpha = 0.3)
             
             ax.set_xlabel('# cells', labelpad = -2)
-            ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
+            #ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
             ax.set_ylim([0, 25])
             ax.set_yticks([0, 12.5, 25])
             ax.set_ylabel('R2s error', labelpad = 5)
@@ -133,7 +133,7 @@ def plot_umap_ncell_study(ncells_dict, save_dir):
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
             
-    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_ncells_{datetime.now().strftime('%d/%m/%y %H:%M:%S')}.html"),'w') as f:
+    with open(os.path.join(save_dir, f"{fnames[0][:5]}_umap_ncells_{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
     
     return True
@@ -149,21 +149,6 @@ params = {
 signal_name = 'ML_rates'
 label_names = ['posx']
 
-#%%
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/ncells'
-params = {
-    'nn_list': [3, 10, 20],
-    'max_dim': 3,
-    'verbose': True,
-    'n_splits': 2,
-    'min_cells': 5,
-    'max_cells': 100,
-    'n_steps': 2
-    
-    }
-
-signal_name = 'ML_rates'
-label_names = ['posx']
 #%% M2019
 #load data
 f = open(os.path.join(save_dir,'M2019_umap_ncells_logFile.txt'), 'w')
@@ -198,3 +183,38 @@ print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")
 sys.stdout = original
 f.close()
 _ = plot_umap_ncell_study(M2019_umap_ncells, save_dir)
+
+#%% M2025
+#load data
+f = open(os.path.join(save_dir,'M2025_umap_ncells_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2025 umap ncells: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
+file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
+sub_dir = next(os.walk(file_dir))[1]
+foi = [f for f in sub_dir if 'M2025' in f]
+M2025 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2025_df_dict.pkl', verbose = True, struct_type = "pickle")
+
+fname_list = list(M2025.keys())
+M2025_umap_ncells = dict()
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
+    pd_struct = copy.deepcopy(M2025[fname])
+    
+    M2025_umap_ncells[fname] = dim_red.compute_umap_to_ncells(pd_object = pd_struct,base_signal = signal_name, 
+                                                  label_signal = label_names,trial_signal = 'index_mat',**params)
+    
+    M2025_umap_ncells[fname]['params']['base_name'] = signal_name
+    M2025_umap_ncells[fname]['params']['label_name'] = label_names
+    
+    #save results
+    save_ks = open(os.path.join(save_dir, "M2025_umap_ncells_dict.pkl"), "wb")
+    pickle.dump(M2025_umap_ncells, save_ks)
+    save_ks.close()
+      
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
+_ = plot_umap_ncell_study(M2025_umap_ncells, save_dir)
