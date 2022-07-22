@@ -231,6 +231,52 @@ save_rs = open(os.path.join(save_dir, "DDC_rotation_study_dict.pkl"), "wb")
 pickle.dump(DDC_rotation_study, save_rs)
 save_rs.close()
 
+#%% GC4
+mouse = 'GC4'
+load_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/data/' + mouse
+GC4 = gu.load_files(load_dir, '*_PyalData_struct.mat', verbose=True, struct_type = "PyalData")
+
+fnames = list(GC4.keys())
+GC4_p= copy.deepcopy(GC4[fnames[0]])
+GC4_r= copy.deepcopy(GC4[fnames[1]])
+
+GC4_p = gu.add_firing_rates(GC4_p, 'smooth', std=0.25, num_std = 5, assymetry = True, continuous = True)
+GC4_r = gu.add_firing_rates(GC4_r, 'smooth', std=0.25, num_std = 5, assymetry = True, continuous = True)
+GC4_angle, GC4_sI_nn, GC4_params = dim_red.check_rotation_params(GC4_p, GC4_r, signal_field, save_dir, dim=dim_deep, verbose = True)
+
+GC4_rotation_study = {
+        'angle': GC4_angle,
+        'sI': GC4_sI_nn,
+        'params': GC4_params
+        }
+
+save_rs = open(os.path.join(save_dir, "GC4_rotation_study_dict.pkl"), "wb")
+pickle.dump(GC4_rotation_study, save_rs)
+save_rs.close()
+
+#%% GC5
+mouse = 'GC5'
+load_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/data/' + mouse
+GC5 = gu.load_files(load_dir, '*_PyalData_struct.mat', verbose=True, struct_type = "PyalData")
+
+fnames = list(GC5.keys())
+GC5_p= copy.deepcopy(GC5[fnames[0]])
+GC5_r= copy.deepcopy(GC5[fnames[1]])
+
+GC5_p = gu.add_firing_rates(GC5_p, 'smooth', std=0.25, num_std = 5, assymetry = True, continuous = True)
+GC5_r = gu.add_firing_rates(GC5_r, 'smooth', std=0.25, num_std = 5, assymetry = True, continuous = True)
+GC5_angle, GC5_sI_nn, GC5_params = dim_red.check_rotation_params(GC5_p, GC5_r, signal_field, save_dir, dim=dim_deep, verbose = True)
+
+GC5_rotation_study = {
+        'angle': GC5_angle,
+        'sI': GC5_sI_nn,
+        'params': GC5_params
+        }
+
+save_rs = open(os.path.join(save_dir, "GC5_rotation_study_dict.pkl"), "wb")
+pickle.dump(GC5_rotation_study, save_rs)
+save_rs.close()
+
 #%% Load
 save_dir2 = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/results/old/rotation_study_old/rotation_study'
 if "CZ3_rotation_study" not in locals():
@@ -314,7 +360,6 @@ plt.show()
 #%%
 plt.savefig(os.path.join(save_dir,'LT_DeepSup_rotation_boxplot.svg'), dpi = 400,bbox_inches="tight")
 plt.savefig(os.path.join(save_dir,'LT_DeepSup_rotation_boxplot.png'), dpi = 400,bbox_inches="tight")
-
 
 #%% PREPARE PLOT EMBEDDING EXAMPLES + BOXES
 if "GC2" not in  locals():
