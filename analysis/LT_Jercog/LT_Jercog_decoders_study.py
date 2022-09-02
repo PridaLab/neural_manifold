@@ -102,7 +102,7 @@ def plot_decoders_study(dec_dict, save_dir):
     
     return True
 #%% PARAMS
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/decoders'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/decoders'
 params = {
     'x_base_signal': 'deconvProb',
     'y_signal_list': ['posx'],
@@ -383,7 +383,7 @@ for dec_idx, dec_name in enumerate(dec_list):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)           
     
-    if dec_idx == 4:
+    if dec_idx == 3:
         ax.legend()
 plt.subplots_adjust(left=0.05,
                     bottom=0.05, 
@@ -393,8 +393,8 @@ plt.subplots_adjust(left=0.05,
                     hspace=0.05)
 
 #%%
-save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/poster_figures'
-plt.savefig(os.path.join(save_fig,'poster_decoders.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
-plt.savefig(os.path.join(save_fig,'poster_decoders.svg'), dpi = 400,bbox_inches="tight",transparent=True)    
+save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/decoders'
+plt.savefig(os.path.join(save_fig,'spikes_decoders.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
+plt.savefig(os.path.join(save_fig,'spikes_decoders.svg'), dpi = 400,bbox_inches="tight",transparent=True)    
 
 

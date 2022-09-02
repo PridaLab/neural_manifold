@@ -184,6 +184,41 @@ sys.stdout = original
 f.close()
 _ = plot_umap_ncell_study(M2019_umap_ncells, save_dir)
 
+#%% M2023
+#load data
+f = open(os.path.join(save_dir,'M2023_umap_ncells_logFile.txt'), 'w')
+original = sys.stdout
+sys.stdout = gu.Tee(sys.stdout, f)
+
+print(f"M2023 umap ncells: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
+
+file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
+sub_dir = next(os.walk(file_dir))[1]
+foi = [f for f in sub_dir if 'M2023' in f]
+M2023 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2023_df_dict.pkl', verbose = True, struct_type = "pickle")
+
+fname_list = list(M2023.keys())
+M2023_umap_ncells = dict()
+for f_idx, fname in enumerate(fname_list):
+    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
+    pd_struct = copy.deepcopy(M2023[fname])
+    
+    M2023_umap_ncells[fname] = dim_red.compute_umap_to_ncells(pd_object = pd_struct,base_signal = signal_name, 
+                                                  label_signal = label_names,trial_signal = 'index_mat',**params)
+    
+    M2023_umap_ncells[fname]['params']['base_name'] = signal_name
+    M2023_umap_ncells[fname]['params']['label_name'] = label_names
+    
+    #save results
+    save_ks = open(os.path.join(save_dir, "M2023_umap_ncells_dict.pkl"), "wb")
+    pickle.dump(M2023_umap_ncells, save_ks)
+    save_ks.close()
+      
+print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")  
+sys.stdout = original
+f.close()
+_ = plot_umap_ncell_study(M2023_umap_ncells, save_dir)
+
 #%% M2025
 #load data
 f = open(os.path.join(save_dir,'M2025_umap_ncells_logFile.txt'), 'w')

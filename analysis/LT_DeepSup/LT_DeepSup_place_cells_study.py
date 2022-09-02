@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
 
 #%% GENERAL PARAMS
-save_dir =  '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/results/place_cells_study'
+save_dir =  '/media/julio/DATOS/spatial_navigation/JP_data/LT_Kainate/results/place_cells_study'
 params = {
     "dim": 1,
     "save_dir":save_dir,
@@ -69,7 +69,7 @@ for fname in fname_list:
     
 #%% CZ4: 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/data/CZ4'
+file_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_Kainate/data/CZ4'
 CZ4 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(CZ4.keys())
@@ -224,7 +224,7 @@ for fname in fname_list:
     
 #%% GC2: 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/data/GC2'
+file_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_Kainate/data/GC2'
 GC2 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(GC2.keys())

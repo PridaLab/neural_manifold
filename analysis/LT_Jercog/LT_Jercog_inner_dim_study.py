@@ -21,12 +21,12 @@ import pandas as pd
 
 #%% COMPUTE INNER DIM
 params = {
-    'base_signal': 'ML_rates',
+    'base_signal': 'th_rates',
     'min_neigh': 2,
     'max_neigh':2**5,
     'verbose': True}
 
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/inner_dim'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/events/inner_dim'
 
 #%% M2019
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
