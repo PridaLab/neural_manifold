@@ -138,6 +138,7 @@ def plot_kernel_study(kernel_dict, save_dir):
     return True
 #%% GENERAL PARAMS
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/events/kernel_study'
+data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data'
 params = {
     'ks_list':[0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,2,5,10,np.inf],
     'assymetry_list':[False, True],
@@ -154,7 +155,7 @@ save_params.update(params)
 save_params.update({'spikes_field':spikes_field, 'traces_field':traces_field})
 #%% M2019
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2019'
+file_dir =  os.path.join(data_dir, '2019')
 M2019 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(M2019.keys())
@@ -180,9 +181,8 @@ _ = plot_kernel_study(M2019_kernel_study, save_dir)
 
 #%% M2021
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2021'
+file_dir =  os.path.join(data_dir, '2021')
 M2021 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
-
 fname_list = list(M2021.keys())
 M2021_kernel_study = dict()
 for fname in fname_list:
@@ -233,7 +233,7 @@ _ = plot_kernel_study(M2022_kernel_study, save_dir)
 '''
 #%% M2023
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2023'
+file_dir =  os.path.join(data_dir, '2023')
 M2023 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(M2023.keys())
@@ -259,7 +259,7 @@ _ = plot_kernel_study(M2023_kernel_study, save_dir)
 
 #%% M2024
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2024'
+file_dir =  os.path.join(data_dir, '2024')
 M2024 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(M2024.keys())
@@ -285,7 +285,7 @@ _ = plot_kernel_study(M2024_kernel_study, save_dir)
 
 #%% M2025
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2025'
+file_dir =  os.path.join(data_dir, '2025')
 M2025 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(M2025.keys())
@@ -311,7 +311,7 @@ _ = plot_kernel_study(M2025_kernel_study, save_dir)
 
 #%% M2026
 #load data
-file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2026'
+file_dir =  os.path.join(data_dir, '2026')
 M2026 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
 fname_list = list(M2026.keys())
@@ -336,7 +336,6 @@ for fname in fname_list:
 _ = plot_kernel_study(M2026_kernel_study, save_dir)
 
 #%% LOAD DATA
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/kernel_study'
 if "M2019_kernel_study" not in locals():
     M2019_kernel_study = gu.load_files(save_dir, '*M2019_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_kernel_study" not in locals():
@@ -412,57 +411,57 @@ cpal2 = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
 cpal3 = ["#CDB4DB", "#FFC8DD", "#FFAFCC", "#BDE0FE", "#A2D2FF"]
 cpal1 = ["#5d93ef","#f8b242", "#97e297", "#f19b91", "#92bbef"]
 
-plt.figure(figsize=(10,3))
-for dec_idx in range(4):
-    if dec_idx <2:
-        plot_idx = dec_idx+1
-    else:
-        plot_idx = dec_idx - 1 + 6
-    ax = plt.subplot(2,6,plot_idx)
-    m = np.nanmean(R2s[:,dec_idx,:], axis=(1,2))
-    sd = np.nanstd(R2s[:,dec_idx,:], axis=(1,2))/np.sqrt(R2s.shape[3]*R2s.shape[1])
-    ax.plot(m, c= cpal2[3])
-    ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= cpal2[3], alpha = 0.3)
-    ax.set_xlabel('kernel (ms)', labelpad = -2)
-    ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 90)
-    ax.set_ylim([0, R2s_vmax])
-    ax.set_yticks([0, R2s_vmax/2, R2s_vmax])
-    ax.set_ylabel('error xpos [cm]', labelpad = 5)
-    ax.set_title(dec_name[dec_idx])
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+# plt.figure(figsize=(10,3))
+# for dec_idx in range(4):
+#     if dec_idx <2:
+#         plot_idx = dec_idx+1
+#     else:
+#         plot_idx = dec_idx - 1 + 6
+#     ax = plt.subplot(2,6,plot_idx)
+#     m = np.nanmean(R2s[:,dec_idx,:], axis=(1,2))
+#     sd = np.nanstd(R2s[:,dec_idx,:], axis=(1,2))/np.sqrt(R2s.shape[3]*R2s.shape[1])
+#     ax.plot(m, c= cpal2[3])
+#     ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= cpal2[3], alpha = 0.3)
+#     ax.set_xlabel('kernel (ms)', labelpad = -2)
+#     ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 90)
+#     ax.set_ylim([0, R2s_vmax])
+#     ax.set_yticks([0, R2s_vmax/2, R2s_vmax])
+#     ax.set_ylabel('error xpos [cm]', labelpad = 5)
+#     ax.set_title(dec_name[dec_idx])
+#     ax.spines['top'].set_visible(False)
+#     ax.spines['right'].set_visible(False)
 
-ax = plt.subplot(1,3,2)
-m = np.nanmean(idim, axis=(1,2))
-sd = np.nanstd(idim, axis=(1,2))
-ax.plot(m, c= cpal2[3])
-ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= cpal2[3], alpha = 0.3)
+# ax = plt.subplot(1,3,2)
+# m = np.nanmean(idim, axis=(1,2))
+# sd = np.nanstd(idim, axis=(1,2))
+# ax.plot(m, c= cpal2[3])
+# ax.fill_between(np.arange(len(m)), m-sd, m+sd, color= cpal2[3], alpha = 0.3)
 
-ax.set_xlabel('kernel (ms)', labelpad = -2)
-ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
-ax.set_ylim([0, 4.5])
-ax.set_yticks([0,2,4])
-ax.set_ylabel('Inner Dim', labelpad = 5)
-ax.set_title('Inner dim')
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
+# ax.set_xlabel('kernel (ms)', labelpad = -2)
+# ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
+# ax.set_ylim([0, 4.5])
+# ax.set_yticks([0,2,4])
+# ax.set_ylabel('Inner Dim', labelpad = 5)
+# ax.set_title('Inner dim')
+# ax.spines['top'].set_visible(False)
+# ax.spines['right'].set_visible(False)
 
-ax = plt.subplot(1,3,3)
-m = np.nanmean(sI, axis=(2,3))
-sd = np.nanstd(sI, axis=(2,3))/np.sqrt(sI.shape[2]*sI.shape[3])
-ax.plot(m[:,1], c= cpal2[3], label = 'Local: ' + sI_nn[1])
-ax.fill_between(np.arange(len(m[:,1])), m[:,1]-sd[:,1], m[:,1]+sd[:,1], color=cpal2[3], alpha = 0.3)
-ax.plot(m[:,3], c= cpal2[1], label = 'Global: ' + sI_nn[3])
-ax.fill_between(np.arange(len(m[:,4])), m[:,3]-sd[:,3], m[:,3]+sd[:,3], color= cpal2[1], alpha = 0.3)
-ax.set_xlabel('kernel (ms)', labelpad = -2)
-ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
-ax.set_ylim([0, 1])
-ax.set_yticks([0,0.5, 1])
-ax.legend()
-ax.set_ylabel('sI xpos', labelpad = 5)
-ax.set_title('sI')
-ax.spines['top'].set_visible(False)
-ax.spines['right'].set_visible(False)
+# ax = plt.subplot(1,3,3)
+# m = np.nanmean(sI, axis=(2,3))
+# sd = np.nanstd(sI, axis=(2,3))/np.sqrt(sI.shape[2]*sI.shape[3])
+# ax.plot(m[:,1], c= cpal2[3], label = 'Local: ' + sI_nn[1])
+# ax.fill_between(np.arange(len(m[:,1])), m[:,1]-sd[:,1], m[:,1]+sd[:,1], color=cpal2[3], alpha = 0.3)
+# ax.plot(m[:,3], c= cpal2[1], label = 'Global: ' + sI_nn[3])
+# ax.fill_between(np.arange(len(m[:,4])), m[:,3]-sd[:,3], m[:,3]+sd[:,3], color= cpal2[1], alpha = 0.3)
+# ax.set_xlabel('kernel (ms)', labelpad = -2)
+# ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
+# ax.set_ylim([0, 1])
+# ax.set_yticks([0,0.5, 1])
+# ax.legend()
+# ax.set_ylabel('sI xpos', labelpad = 5)
+# ax.set_title('sI')
+# ax.spines['top'].set_visible(False)
+# ax.spines['right'].set_visible(False)
 
 
 #%% PLOT
