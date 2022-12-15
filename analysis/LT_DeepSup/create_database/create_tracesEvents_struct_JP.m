@@ -125,6 +125,7 @@ function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condi
     gla_guide.Properties.VariableNames{2} = 'local_accepted';
     gla_guide(:,3) = array2table(accepted_to_global_guide(:,2)*0);
     gla_guide.Properties.VariableNames{3} = 'local_all';
+    
     %add local_all guide 
     for cell= 1:size(gla_guide)
         accepted_num = gla_guide{cell,2};
@@ -132,6 +133,21 @@ function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condi
         gla_guide(cell,3) = array2table(accepted_to_local_guide(local_idx,2));
     end
     tracesEvents.gla_guide = gla_guide;
+      %if correspondesdonce table has been done with CNMFE then use this
+      %section
+%     gla_guide = array2table(accepted_to_global_guide(:,1));
+%     gla_guide.Properties.VariableNames{1} = 'global';
+%     gla_guide(:,2) = array2table(accepted_to_global_guide(:,2)*0);
+%     gla_guide.Properties.VariableNames{2} = 'local_accepted';
+%     gla_guide(:,3) = array2table(accepted_to_global_guide(:,2));
+%     gla_guide.Properties.VariableNames{3} = 'local_all';
+%     %add local_all guide 
+%     for cell= 1:size(gla_guide)
+%         accepted_num = gla_guide{cell,3};
+%         local_idx = accepted_to_local_guide(:,2)==accepted_num;
+%         gla_guide(cell,2) = array2table(accepted_to_local_guide(local_idx,1));
+%     end
+%     tracesEvents.gla_guide = gla_guide;
 
     %Load raw traces (local guide)
     double_fprintf(fileID,'\tLoading raw traces...')
@@ -216,6 +232,7 @@ function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condi
                             .*~contains({files(:).name}, 'props', 'IgnoreCase',true);
     events_file_index = find(events_file_index);
     double_fprintf(fileID,'\b\b\b: %i files found:\n',length(events_file_index))
+
     for file_num= 1:length(events_file_index)
         events_idx = events_file_index(file_num);
         double_fprintf(fileID,'\t\t%i/%i: %s: ', file_num, length(events_file_index), files(events_idx).name);

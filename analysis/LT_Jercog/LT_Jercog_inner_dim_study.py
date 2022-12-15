@@ -19,6 +19,8 @@ from io import BytesIO
 import seaborn as sns
 import pandas as pd
 
+%matplotlib qt
+#%matplotlib inline
 #%% COMPUTE INNER DIM
 params = {
     'base_signal': 'th_rates',
@@ -26,7 +28,7 @@ params = {
     'max_neigh':2**5,
     'verbose': True}
 
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/events/inner_dim'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/inner_dim'
 
 #%% M2019
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
@@ -184,7 +186,7 @@ if "M2025_inner_dim" not in locals():
     M2025_inner_dim = gu.load_files(save_dir, '*M2025_inner_dim.pkl', verbose=True, struct_type = "pickle")  
 if "M2026_inner_dim" not in locals():
     M2026_inner_dim = gu.load_files(save_dir, '*M2026_inner_dim.pkl', verbose=True, struct_type = "pickle")  
-save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/poster_figures'
+save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/inner_dim'
 
 #%%
 from scipy.stats import linregress

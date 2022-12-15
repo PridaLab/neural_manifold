@@ -459,13 +459,13 @@ def _check_placefields(pos_pdf, neu_pdf, place_cells = None):
     subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
     pneu_pdf = eval("neu_pdf[" + ":,"*(neu_pdf.ndim - 2)+ "place_cells,:]")
     max_response = np.nanmax(pneu_pdf, axis=space_dims)
-    baseline_th = np.percentile(pneu_pdf, 25, axis=space_dims)
+    baseline_th = np.percentile(pneu_pdf, 20, axis=space_dims)
     baseline_th = np.tile(baseline_th, tuple(subAxis_length+[1,1]))
     baseline_response = copy.deepcopy(pneu_pdf)
     baseline_response[pneu_pdf>baseline_th] = np.nan
     baseline_response = np.nanmean(baseline_response, axis= space_dims)
     
-    putative_th = 0.25*(max_response-baseline_response)    
+    putative_th = 0.25*(max_response-baseline_response)+baseline_response    
     putative_th = np.tile(putative_th, tuple(subAxis_length+[1,1]))
     putative_fields = pneu_pdf>putative_th
     

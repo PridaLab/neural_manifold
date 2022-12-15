@@ -4,16 +4,18 @@ Created on Wed Feb 16 10:58:00 2022
 
 @author: Usuario
 """
-import pandas as pd
 import numpy as np
 import os, copy, pickle, warnings, random
-from datetime import datetime
 
 from sklearn.metrics import pairwise_distances
 from scipy.stats import linregress
+from scipy.stats import pearsonr
+from scipy.spatial import cKDTree
+import scipy.io
+
+from tqdm import tqdm
 
 from sklearn.manifold import Isomap
-from scipy.stats import pearsonr
 
 import umap
 from kneed import KneeLocator
@@ -21,11 +23,10 @@ from kneed import KneeLocator
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu #translators (from Dataframe to np.ndarray)
 from neural_manifold import structure_index as sI 
-from neural_manifold.decoders import decoders_1D
 from neural_manifold.dimensionality_reduction import validation as dim_validation 
 
 @gu.check_inputs_for_pd
-def compute_inner_dim(base_signal = None, min_neigh = 2, max_neigh = 2**5, verbose=False):
+def compute_inner_dim(base_signal = None, min_neigh = 2, max_neigh = 2**5, num_iter = 1000, verbose=False):
     '''Compute internal dimensionality of data array as described in: https://doi.org/10.1038/s41467-019-12724-2
     
     Parameters:
@@ -79,13 +80,17 @@ def compute_inner_dim(base_signal = None, min_neigh = 2, max_neigh = 2**5, verbo
     #Compute max distance between samples
     max_dist = np.max(D_pw)
     #Define space of growing radius of balls in log2 base
-    radius = np.logspace(np.log2(min_dist), np.log2(max_dist),1000,endpoint = True, base=2).reshape(-1,1)
+    radius = np.logspace(np.log2(min_dist), np.log2(max_dist),num_iter,endpoint = True, base=2).reshape(-1,1)
     #For each radius check number of neighbours for each sample
     neigh = np.zeros((radius.shape[0],1))
+    if verbose:
+        bar=tqdm(total=int(len(radius)), desc='Computing Inner dim')
     for idx, rad in enumerate(radius):
         temp = D_pw <= rad
         neigh[idx,0] = np.mean(np.sum(temp,axis=1)-1)
+        if verbose: bar.update(1)  
     #get rid of initial 0s (no neighbours)
+    if verbose: bar.close()
     radius = np.log2(radius[neigh[:,0]>0,:])
     neigh = np.log2(neigh[neigh[:,0]>0,:])
     #Compute slope in the range of neighbours between points given by (min_neigh, max_neigh)
@@ -172,7 +177,7 @@ def compute_umap_trust_dim(base_signal = None, n_neigh= 0.01, max_dim=10, min_di
         if dim>1:
             red_error = abs(num_trust[dim-1,0]-num_trust[dim-2,0])
             if verbose:
-                print(': Error improvement of %.4f' %red_error, sep='')
+                print(': error improvement of %.4f' %red_error, sep='')
         else:
             if verbose:
                 print('')
@@ -244,7 +249,7 @@ def compute_umap_continuity_dim(base_signal = None, n_neigh= 0.01, max_dim=10, m
     num_cont = np.zeros((max_dim,1))*np.nan
     for dim in range(1, max_dim+1):
         if verbose:
-            print('Checking dimension %i ' %(dim), sep='', end = '')
+            print('Checking dimension %i' %(dim), sep='', end = '')
         emb = umap.UMAP(n_neighbors = n_neigh, n_components = dim, min_dist=min_dist).fit_transform(base_signal)
         num_cont[dim-1,0] = dim_validation.continuity_vector(base_signal, emb ,n_neigh)[-1]
         if return_emb:
@@ -252,7 +257,7 @@ def compute_umap_continuity_dim(base_signal = None, n_neigh= 0.01, max_dim=10, m
         if dim>1:
             red_error = abs(num_cont[dim-1,0]-num_cont[dim-2,0])
             if verbose:
-                print(': Error improvement of %.4f' %red_error, sep='')
+                print(': error improvement of %.4f' %red_error, sep='')
         else:
             if verbose:
                 print('')
@@ -502,3 +507,43 @@ def compute_umap_sI_dim(base_signal = None, label_signal = None, n_neigh= 0.01, 
         return dim, sI_val, return_emb_list
     else:
         return dim, sI_val
+
+
+@gu.check_inputs_for_pd
+def compute_abids(base_signal = None, n_neigh= 50):
+    '''Compute dimensionality of data array according to Structure Index in UMAP
+    
+    Parameters:
+    -----------
+        base_signal (numpy Array): 
+            array containing the signal one wants to estimate dimensionality.
+        n_neigh (int): 
+            number of neighbours used to compute angle.                     
+    Returns:
+    --------
+        (array): 
+            array containing the estimated dimensionality for each point in the
+            cloud.
+        
+    '''
+
+    def abid(X,k,x,search_struct,offset=1):
+        neighbor_norms, neighbors = search_struct.query(x,k+offset)
+        neighbors = X[neighbors[offset:]] - x
+        normed_neighbors = neighbors / neighbor_norms[offset:,None]
+        # Original publication version that computes all cosines
+        # coss = normed_neighbors.dot(normed_neighbors.T)
+        # return np.mean(np.square(coss))**-1
+        # Using another product to get the same values with less effort
+        para_coss = normed_neighbors.T.dot(normed_neighbors)
+        return k**2 / np.sum(np.square(para_coss))
+
+    search_struct = cKDTree(base_signal)
+    return np.array([
+        abid(base_signal,n_neigh,x,search_struct)
+        for x in tqdm(base_signal,desc="abids",leave=False)
+    ])
+
+
+
+

@@ -389,13 +389,12 @@ if "M2023_umap_npoints" not in locals():
     M2023_umap_npoints = gu.load_files(save_dir, '*M2023_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2024_umap_npoints" not in locals():
     M2024_umap_npoints = gu.load_files(save_dir, '*M2024_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")
-    
-    
-if "M2025_umap_npoints" not in locals():
-    M2025_umap_npoints = gu.load_files(save_dir, '*M2025_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
-if "M2026_umap_npoints" not in locals():
-    M2026_umap_npoints = gu.load_files(save_dir, '*M2026_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
+#if "M2025_umap_npoints" not in locals():
+#    M2025_umap_npoints = gu.load_files(save_dir, '*M2025_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
+#if "M2026_umap_npoints" not in locals():
+#    M2026_umap_npoints = gu.load_files(save_dir, '*M2026_umap_npoints_dict.pkl', verbose=True, struct_type = "pickle")  
 
+save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/npoints/'
 #%%
 from kneed import KneeLocator
 
@@ -501,28 +500,33 @@ dim_space = np.arange(9)
 fig = plt.figure(figsize=(15,8))
 
 ax = plt.subplot(1,2,1)
-m = np.nanmean(sI_val[:8,2,nns,:,:], axis = (-2,-1))
-sd = np.nanstd(sI_val[:8,2,nns,:,:], axis = (-2,-1))
-ax.plot(point_list[:8], m, color = cpal[0])
-ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[0], alpha=0.3)
+m = np.nanmean(sI_val[:8,2,:,:,:], axis = (-2,-1))
+sd = np.nanstd(sI_val[:8,2,:,:,:], axis = (-2,-1))
+
+ax.plot(point_list[:8], m[:,0], color = cpal[0], label = 'local')
+ax.fill_between(point_list[:8], m[:,0]-sd[:,0], m[:,0]+sd[:,0], color = cpal[0], alpha=0.3)
+#ax.plot(point_list[:8], m[:,-1], color = cpal[0], linestyle='--', label = 'global')
+#ax.fill_between(point_list[:8], m[:,-1]-sd[:,-1], m[:,-1]+sd[:,-1], color = cpal[0], alpha=0.3)
+ax.set_ylabel('sI', size=12)
+ax.legend()
 ax.set_ylim([0.245, 1.05])
 ax.set_ylabel('Structure Index (x-pos)', size=12)
 ax.set_xlabel('Number of points', size=12)
 
 
 ax = plt.subplot(1,2,2)
-m = np.nanmean(trust_dim[:8,nns,:,:], axis = (-2,-1))
-sd = np.nanstd(trust_dim[:8,nns,:,:], axis = (-2,-1))
+m = np.nanmean(trust_dim[:8,:,:,:], axis = (-3,-2,-1))
+sd = np.nanstd(trust_dim[:8,:,:,:], axis = (-3,-2,-1))
 ax.plot(point_list[:8], m, color = cpal[1], label = 'trust')
 ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[1], alpha=0.3)
 
-m = np.nanmean(cont_dim[:8,nns,:,:], axis = (-2,-1))
-sd = np.nanstd(cont_dim[:8,nns,:,:], axis = (-2,-1))
+m = np.nanmean(cont_dim[:8,:,:,:], axis = (-3,-2,-1))
+sd = np.nanstd(cont_dim[:8,:,:,:], axis = (-3,-2,-1))
 ax.plot(point_list[:8], m, color = cpal[4], label = 'cont')
 ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[4], alpha=0.3)
 
-m = np.nanmean(meanh_dim[:8,nns,:,:], axis = (-2,-1))
-sd = np.nanstd(meanh_dim[:8,nns,:,:], axis = (-2,-1))
+m = np.nanmean(meanh_dim[:8,:,:,:], axis = (-3,-2,-1))
+sd = np.nanstd(meanh_dim[:8,:,:,:], axis = (-3,-2,-1))
 ax.plot(point_list[:8], m, color = cpal[-1], label = 'HM')
 ax.fill_between(point_list[:8], m-sd, m+sd, color = cpal[-1], alpha=0.3)
 
@@ -541,3 +545,7 @@ ax.axhline(y=3, color='k', linestyle= '--')
 ax.set_yticks([0,1,2,3,4])
 ax.set_ylim([0,4.5])
 ax.set_xlabel('Day')
+#%%
+plt.tight_layout()
+plt.savefig(os.path.join(save_fig,'umap_npoints.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
+plt.savefig(os.path.join(save_fig,'umap_npoints.svg'), dpi = 400,bbox_inches="tight",transparent=True)

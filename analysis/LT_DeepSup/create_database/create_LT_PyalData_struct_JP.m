@@ -1,6 +1,6 @@
 close all; clear ; clc;
 %%
-data_file =  'DDC_clean_rot_events_s4.mat';
+data_file =  'ChZ6_lt_events_s2.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -350,65 +350,65 @@ for trial = 1:length(R2L)
 end
 %% Check vicarious trials
 L2Rv = [];
-trial = 1;
-while trial<=length(L2R)
-    pos = tracesEvents.position(L2R(trial,1):L2R(trial,2),1);
-    vel = movmean(tracesEvents.velocity(L2R(trial,1):L2R(trial,2)), round(tracesEvents.sF*1));
-    vel_middle_st = find(pos<prctile(pos,40));
-    vel_middle_st_idx = find(diff(vel_middle_st)>1);
-    if ~isempty(vel_middle_st_idx)
-        vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
-    else
-        vel_middle_st = vel_middle_st(end);
-    end
-    vel_middle_en = find(pos>prctile(pos,60));
-    vel_middle_en_idx = find(diff(vel_middle_en)>1);
-    if ~isempty(vel_middle_en_idx)
-        vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
-    else
-        vel_middle_en = vel_middle_en(1);
-    end
-    middle_vel = mean(vel(vel_middle_st:vel_middle_en));
-    edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
-    if middle_vel<=0.7*edges_vel
-        L2Rv(end+1,:) = L2R(trial,:);
-        L2R(trial,:) = [];
-    else
-        trial = trial+1;
-
-    end
-end
+% trial = 1;
+% while trial<=length(L2R)
+%     pos = tracesEvents.position(L2R(trial,1):L2R(trial,2),1);
+%     vel = movmean(tracesEvents.velocity(L2R(trial,1):L2R(trial,2)), round(tracesEvents.sF*1));
+%     vel_middle_st = find(pos<prctile(pos,40));
+%     vel_middle_st_idx = find(diff(vel_middle_st)>1);
+%     if ~isempty(vel_middle_st_idx)
+%         vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
+%     else
+%         vel_middle_st = vel_middle_st(end);
+%     end
+%     vel_middle_en = find(pos>prctile(pos,60));
+%     vel_middle_en_idx = find(diff(vel_middle_en)>1);
+%     if ~isempty(vel_middle_en_idx)
+%         vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
+%     else
+%         vel_middle_en = vel_middle_en(1);
+%     end
+%     middle_vel = mean(vel(vel_middle_st:vel_middle_en));
+%     edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
+%     if middle_vel<=0.7*edges_vel
+%         L2Rv(end+1,:) = L2R(trial,:);
+%         L2R(trial,:) = [];
+%     else
+%         trial = trial+1;
+% 
+%     end
+% end
 
 R2Lv = [];
-trial = 1;
-middle_vel_hist = zeros(size(R2L,1),2);
-while trial<=length(R2L)
-    pos = tracesEvents.position(R2L(trial,1):R2L(trial,2),1);
-    vel = movmean(tracesEvents.velocity(R2L(trial,1):R2L(trial,2)), round(tracesEvents.sF*1));
-    vel_middle_st = find(pos>prctile(pos,60));
-    vel_middle_st_idx = find(diff(vel_middle_st)>1);
-    if ~isempty(vel_middle_st_idx)
-        vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
-    else
-        vel_middle_st = vel_middle_st(end);
-    end
-    vel_middle_en = find(pos<prctile(pos,35));
-    vel_middle_en_idx = find(diff(vel_middle_en)>1);
-    if ~isempty(vel_middle_en_idx)
-        vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
-    else
-        vel_middle_en = vel_middle_en(1);
-    end
-    
-    middle_vel = mean(vel(vel_middle_st:vel_middle_en));
-    edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
-    if middle_vel<=0.7*edges_vel
-        R2Lv(end+1,:) = R2L(trial,:);
-        R2L(trial,:) = [];
-    else
-        trial = trial+1;
-    end
-end
+% trial = 1;
+% middle_vel_hist = zeros(size(R2L,1),2);
+% while trial<=length(R2L)
+%     pos = tracesEvents.position(R2L(trial,1):R2L(trial,2),1);
+%     vel = movmean(tracesEvents.velocity(R2L(trial,1):R2L(trial,2)), round(tracesEvents.sF*1));
+%     vel_middle_st = find(pos>prctile(pos,60));
+%     vel_middle_st_idx = find(diff(vel_middle_st)>1);
+%     if ~isempty(vel_middle_st_idx)
+%         vel_middle_st = vel_middle_st(vel_middle_st_idx(1));
+%     else
+%         vel_middle_st = vel_middle_st(end);
+%     end
+%     vel_middle_en = find(pos<prctile(pos,35));
+%     vel_middle_en_idx = find(diff(vel_middle_en)>1);
+%     if ~isempty(vel_middle_en_idx)
+%         vel_middle_en = vel_middle_en(vel_middle_en_idx(end)+1);
+%     else
+%         vel_middle_en = vel_middle_en(1);
+%     end
+%     
+%     middle_vel = mean(vel(vel_middle_st:vel_middle_en));
+%     edges_vel = mean([vel(1:vel_middle_st); vel(vel_middle_en:end)]);
+%     if middle_vel<=0.7*edges_vel
+%         R2Lv(end+1,:) = R2L(trial,:);
+%         R2L(trial,:) = [];
+%     else
+%         trial = trial+1;
+%     end
+% end
 fprintf('\nL2L: %i\nR2R: %i\nL2Rv: %i\nR2Lv: %i\nL2R: %i\nR2L: %i\n', size(L2L,1), ...
                             size(R2R,1), size(L2Rv,1), size(R2Lv,1),size(L2R,1), size(R2L,1))
 

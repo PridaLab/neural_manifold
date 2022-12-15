@@ -253,3 +253,151 @@ print(f"\nCompleted: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}")
 sys.stdout = original
 f.close()
 _ = plot_umap_ncell_study(M2025_umap_ncells, save_dir)
+
+#%% LOAD DATA
+ 
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/ncells'
+if "M2019_umap_ncells" not in locals():
+    M2019_umap_ncells = gu.load_files(save_dir, '*M2019_umap_ncells_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2023_umap_ncells" not in locals():
+    M2023_umap_ncells = gu.load_files(save_dir, '*M2023_umap_ncells_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2025_umap_ncells" not in locals():
+    M2025_umap_ncells = gu.load_files(save_dir, '*M2025_umap_ncells_dict.pkl', verbose=True, struct_type = "pickle")
+save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/ncells'
+
+#%%
+
+def get_ncells_results(umap_ncells_dict, session_list):
+    nn_list = umap_ncells_dict[list(umap_ncells_dict.keys())[0]]["params"]["nn_list"]
+    og_num_cells = umap_ncells_dict[list(umap_ncells_dict.keys())[0]]["params"]["og_num_cells"]
+    
+    tinner_dim = np.zeros((len(og_num_cells),3,5))
+    tcont_dim = np.zeros((len(og_num_cells),len(nn_list),3, 5))*np.nan
+    ttrust_dim = np.zeros((len(og_num_cells),len(nn_list),3, 5))*np.nan
+    
+    tsI = np.zeros((len(og_num_cells),len(nn_list),3, 5))*np.nan
+
+    tR2s = np.zeros((len(og_num_cells),4,3,5))*np.nan
+
+    fnames = list(umap_ncells_dict.keys())
+    
+    last_idx = -1
+    for s_idx, s_name in enumerate(fnames):
+        if s_idx==0:
+            last_idx+=1
+            count_idx = 0
+        else:
+            old_s_name = fnames[s_idx-1]
+            old_s_name = old_s_name[:old_s_name.find('_',-5)]
+            new_s_name = s_name[:s_name.find('_',-5)]
+            if new_s_name == old_s_name:
+                count_idx += 1
+            else:
+                last_idx +=1
+                count_idx = 0
+                
+        pd_struct = umap_ncells_dict[s_name]
+        tinner_dim[:,count_idx, session_list[last_idx]] = np.nanmean(pd_struct['inner_dim'], axis = 1)
+        tcont_dim[:,:,count_idx, session_list[last_idx]] = np.nanmean(pd_struct['cont_dim'], axis = 1)
+        ttrust_dim[:,:,count_idx, session_list[last_idx]] = np.nanmean(pd_struct['trust_dim'], axis = 1)
+
+        
+        tsI[:,:,count_idx,session_list[last_idx]] = np.nanmean(pd_struct["sI_values"][:,:,2,:,0], axis = 1)
+        tR2s[:,:,count_idx,session_list[last_idx]] = np.nanmean(pd_struct["R2s_values"][:, :,:,0,:], axis=(1,2))
+        
+    return np.nanmean(tinner_dim,axis=-2), np.nanmean(tcont_dim,axis=-2),np.nanmean(ttrust_dim,axis=-2), np.nanmean(tsI,axis=-2), np.nanmean(tR2s,axis=-2)
+
+#%%
+#Get kernel with better decoding performance
+nn_list = M2019_umap_ncells[list(M2019_umap_ncells.keys())[0]]["params"]["nn_list"]
+og_num_cells = M2019_umap_ncells[list(M2019_umap_ncells.keys())[0]]["params"]["og_num_cells"]
+
+inner_dim = np.zeros((len(og_num_cells),5,3))*np.nan
+cont_dim = np.zeros((len(og_num_cells),len(nn_list),5,3))*np.nan
+trust_dim = np.zeros((len(og_num_cells),len(nn_list),5,3))*np.nan
+
+sI = np.zeros((len(og_num_cells), len(nn_list), 5,3))*np.nan
+R2s = np.zeros((len(og_num_cells),4,5,3))*np.nan
+
+#M2019
+inner_dim[:,:,0], cont_dim[:,:,:,0],trust_dim[:,:,:,0], sI[:,:,:,0], R2s[:,:,:,0] = get_ncells_results(M2019_umap_ncells, [0,1,2,4])
+#M2023
+inner_dim[:,:,1], cont_dim[:,:,:,1],trust_dim[:,:,:,1], sI[:,:,:,1], R2s[:,:,:,1] = get_ncells_results(M2023_umap_ncells, [0,1,2,4])
+#M2025
+inner_dim[:,:,2], cont_dim[:,:,:,2],trust_dim[:,:,:,2], sI[:,:,:,2], R2s[:,:,:,2] = get_ncells_results(M2025_umap_ncells, [0,1,2,3])
+
+#%%
+cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
+dec_list = ['wf','wc','xgb','svm']
+    
+fig = plt.figure(figsize = (16, 4))
+
+xtick_labels = og_num_cells
+num_cells = M2019_umap_ncells[list(M2019_umap_ncells.keys())[0]]['params']['og_num_cells']
+
+ax = plt.subplot(1,3,1)
+m = np.nanmean(sI, axis = (2,3))
+sd = np.nanstd(sI, axis = (2,3))
+ax.plot(xtick_labels, m[:,0], color = cpal[3], label = 'local')
+ax.fill_between(xtick_labels, m[:,0]-sd[:,0], m[:,0]+sd[:,0], color = cpal[3], alpha=0.3)
+ax.plot(xtick_labels, m[:,4], color = cpal[3], linestyle='--', label = 'global')
+ax.fill_between(xtick_labels, m[:,4]-sd[:,4], m[:,4]+sd[:,4], color = cpal[3], alpha=0.3)
+ax.set_ylabel('sI', size=12)
+ax.set_xlabel('# cells', labelpad = -2)
+ax.legend()
+
+
+ax = plt.subplot(1,3,2)
+trust_m = np.nanmean(trust_dim, axis = (-3,-2,-1))
+trust_sd = np.nanstd(trust_dim, axis = (-3,-2,-1))
+ax.plot(xtick_labels,trust_m, c = cpal[2], label = 'trust')
+ax.fill_between(xtick_labels, trust_m-trust_sd, trust_m+trust_sd, color = cpal[2], alpha = 0.3)
+ 
+cont_m = np.nanmean(cont_dim, axis = (-3,-2,-1))
+cont_sd = np.nanstd(cont_dim, axis = (-3,-2,-1))
+ax.plot(xtick_labels,cont_m, c = cpal[4], label = 'cont')
+ax.fill_between(xtick_labels, cont_m-cont_sd, cont_m+cont_sd, color = cpal[4], alpha = 0.3)
+ 
+
+#inner_m = np.nanmean(inner_dim, axis = (-2,-1))
+#inner_sd = np.nanstd(inner_dim, axis = (-2,-1))
+#ax.plot(xtick_labels,inner_m, c = cpal[0], label = 'inner_dim')
+#ax.fill_between(xtick_labels, inner_m-inner_sd, inner_m+inner_sd, color = cpal[0], alpha = 0.3)
+ax.set_xlabel('# cells', labelpad = -2)
+#ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
+ax.set_ylim([0, 5])
+ax.set_ylabel('dim', labelpad = 0)
+ax.legend()
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+for ii in range(4):
+    if ii == 0:
+        pos = 5
+    elif ii == 1:
+        pos = 6
+    elif ii == 2:
+        pos = 11
+    elif ii == 3:
+        pos = 12
+        
+    ax = plt.subplot(2,6,pos)
+    m = np.nanmean(R2s[:,ii,-1,:], axis=(-1))
+    sd = np.nanstd(R2s[:,ii,-1,:], axis=(-1))
+    ax.plot(xtick_labels,m, c = cpal[2], label = dec_list[ii])
+    ax.fill_between(xtick_labels, m-sd, m+sd, color = cpal[2], alpha = 0.3)
+    
+    ax.set_xlabel('# cells', labelpad = -2)
+    #ax.set_xticks(np.arange(len(xtick_labels)), labels=xtick_labels, rotation = 90)
+    ax.set_ylim([0, 25])
+    ax.set_yticks([0, 12.5, 25])
+    ax.set_ylabel('R2s error', labelpad = 5)
+    ax.set_title(dec_list[ii])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+plt.tight_layout()
+
+#%%
+plt.tight_layout()
+plt.savefig(os.path.join(save_fig,'umap_ncells.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
+plt.savefig(os.path.join(save_fig,'umap_ncells.svg'), dpi = 400,bbox_inches="tight",transparent=True)

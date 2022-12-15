@@ -176,7 +176,7 @@ def clean_integer_fields(df):
             try:
                 int_arrays = [np.int32(arr) for arr in df[field]]
             except:
-                print(f"array field {field} could not be converted to int.")
+                print(f"array field '{field}' could not be converted to int.")
             else:
                 if all([np.allclose(int_arr, arr) for (int_arr, arr) in zip(int_arrays, df[field])]):
                     df[field] = int_arrays
@@ -185,7 +185,7 @@ def clean_integer_fields(df):
                 try:
                     int_version = np.int32(df[field])
                 except:
-                        print(f"field {field} could not be converted to int.")
+                        print(f"field '{field}'' could not be converted to int.")
                 else:
                     if np.allclose(int_version, df[field]):
                         df[field] = int_version

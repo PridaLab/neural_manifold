@@ -19,6 +19,12 @@ from io import BytesIO
 
 import seaborn as sns
 import pandas as pd
+
+# %matplotlib qt
+
+#%%
+signal_name = 'ML_rates'
+case = 'spikes'
 #%% PLOT UMAP NN
 def plot_umap_nn_study(nn_dict, save_dir):
     cpal2 = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
@@ -141,7 +147,7 @@ def plot_umap_nn_study(nn_dict, save_dir):
     return True
 
 #%% GENERAL PARAMS
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/nn'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/' + case + '/umap_params_study/nn'
 params = {
     'nn_list': [3, 10, 20, 30, 60, 120, 200, 500, 1000],
     'dim': 5,
@@ -149,7 +155,7 @@ params = {
     'n_splits': 5
     }
 
-signal_name = 'deconvProb'
+
 label_names = ['posx']
 #%% M2019
 f = open(os.path.join(save_dir,'M2019_umap_nn_logFile.txt'), 'w')
@@ -361,13 +367,11 @@ f.close()
 _ = plot_umap_nn_study(M2026_umap_nn, save_dir)
 
 #%% LOAD DATA
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/nn'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/' + case +'/umap_params_study/nn'
 if "M2019_umap_nn" not in locals():
     M2019_umap_nn = gu.load_files(save_dir, '*M2019_umap_nn_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_umap_nn" not in locals():
     M2021_umap_nn = gu.load_files(save_dir, '*M2021_umap_nn_dict.pkl', verbose=True, struct_type = "pickle")
-if "M2022_umap_nn" not in locals():
-    M2022_umap_nn = gu.load_files(save_dir, '*M2022_umap_nn_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2023_umap_nn" not in locals():
     M2023_umap_nn = gu.load_files(save_dir, '*M2023_umap_nn_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2024_umap_nn" not in locals():
@@ -379,10 +383,10 @@ if "M2026_umap_nn" not in locals():
     
 #%%
 #Get kernel with better decoding performance
-nn_list = M2019_umap_nn[list(M2019_umap_nn.keys())[0]]["params"]["nn_list"]
-R2s = np.zeros((len(nn_list),4,4,6))
-sI_og = np.zeros((len(nn_list), 4, 6))
-sI_emb = np.zeros((len(nn_list), len(nn_list), 4, 6))
+nn_list = M2021_umap_nn[list(M2021_umap_nn.keys())[0]]["params"]["nn_list"]
+R2s = np.zeros((len(nn_list),4,4,6))*np.nan
+sI_og = np.zeros((len(nn_list), 4, 6))*np.nan
+sI_emb = np.zeros((len(nn_list), len(nn_list), 4, 6))*np.nan
 
 def get_nn_results(umap_nn_dict):
     nn_list = umap_nn_dict[list(umap_nn_dict.keys())[0]]["params"]["nn_list"]
@@ -443,7 +447,7 @@ dec_name = ["wf", "wc", "xgb", "svm"]
 
 #%%
 cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
-nn_list = M2019_umap_nn[list(M2019_umap_nn.keys())[0]]["params"]["nn_list"]
+nn_list = M2021_umap_nn[list(M2021_umap_nn.keys())[0]]["params"]["nn_list"]
 R2s_vmax = 40
 dec_name = ["wf", "wc", "xgb", "svm"]
 
@@ -501,6 +505,7 @@ for dec_idx in range(4):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
+#%%
 plt.tight_layout()
 plt.savefig(os.path.join(save_dir,'LT_Jercog_umap_nn_study.svg'), dpi = 400,bbox_inches="tight")
 plt.savefig(os.path.join(save_dir,'LT_Jercog_umap_nn_study.png'), dpi = 400,bbox_inches="tight")

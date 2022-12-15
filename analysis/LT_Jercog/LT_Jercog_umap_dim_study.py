@@ -20,6 +20,7 @@ from io import BytesIO
 import seaborn as sns
 import pandas as pd
 
+%matplotlib qt
 #%% PLOT UMAP DIM
 def plot_umap_dim_study(dim_dict, save_dir):
     cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
@@ -38,7 +39,7 @@ def plot_umap_dim_study(dim_dict, save_dir):
     
     
     sI_vmin = np.inf
-    sI_vmax = 0
+    sI_vmax = 0.8
 
     trust_vmin = np.inf
     trust_vmax = 0
@@ -148,9 +149,9 @@ params = {
     'max_dim': 12,
     'verbose': True,
     'n_splits': 5,
-    'nn': 60
+    'nn': 120
     }
-signal_name = 'ML_rates'
+signal_name = 'deconvProb'
 label_names = ['posx']
 
 #%% M2019
@@ -437,8 +438,6 @@ if "M2019_inner_dim" not in locals():
     M2019_inner_dim = gu.load_files(save_dir, '*M2019_inner_dim.pkl', verbose=True, struct_type = "pickle")
 if "M2021_inner_dim" not in locals():
     M2021_inner_dim = gu.load_files(save_dir, '*M2021_inner_dim.pkl', verbose=True, struct_type = "pickle")
-if "M2022_inner_dim" not in locals():
-    M2022_inner_dim = gu.load_files(save_dir, '*M2022_inner_dim.pkl', verbose=True, struct_type = "pickle")
 if "M2023_inner_dim" not in locals():
     M2023_inner_dim = gu.load_files(save_dir, '*M2023_inner_dim.pkl', verbose=True, struct_type = "pickle")
 if "M2024_inner_dim" not in locals():
@@ -448,13 +447,11 @@ if "M2025_inner_dim" not in locals():
 if "M2026_inner_dim" not in locals():
     M2026_inner_dim = gu.load_files(save_dir, '*M2026_inner_dim.pkl', verbose=True, struct_type = "pickle")  
     
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/umap_params_study/dim'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/dim'
 if "M2019_umap_dim" not in locals():
     M2019_umap_dim = gu.load_files(save_dir, '*M2019_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_umap_dim" not in locals():
     M2021_umap_dim = gu.load_files(save_dir, '*M2021_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
-if "M2022_umap_dim" not in locals():
-    M2022_umap_dim = gu.load_files(save_dir, '*M2022_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2023_umap_dim" not in locals():
     M2023_umap_dim = gu.load_files(save_dir, '*M2023_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2024_umap_dim" not in locals():
@@ -464,7 +461,7 @@ if "M2025_umap_dim" not in locals():
 if "M2026_umap_dim" not in locals():
     M2026_umap_dim = gu.load_files(save_dir, '*M2026_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
     
-save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/poster_figures'
+save_fig = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/dim'
 #%%
 from kneed import KneeLocator
 
