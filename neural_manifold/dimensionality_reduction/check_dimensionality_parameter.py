@@ -9,7 +9,10 @@ Created on Tue Mar 15 17:40:39 2022
 import numpy as np
 from neural_manifold import general_utils as gu
 from neural_manifold import decoders as dec 
-from neural_manifold import structure_index as sI 
+
+import sys
+sys.path.append('/media/julio/DATOS/sI_project/structure_index')
+from structure_index import compute_structure_index
 
 from neural_manifold.dimensionality_reduction import validation as dim_validation 
 from neural_manifold.dimensionality_reduction import compute_dimensionality as compute_dim
@@ -53,16 +56,17 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 	else:
 		vel_th = 0
 		kwargs['vel_th'] = vel_th
-		if 'sF' in kwargs:
-			sF = kwargs['sF']
+
+	if 'sF' in kwargs:
+		sF = kwargs['sF']
+	else:
+		if 'sF' in pd_struct.columns:
+			sF = pd_struct['sF'][0]
+		elif 'Fs' in pd_struct.columns:
+			sF = pd_struct['Fs'][0]
 		else:
-			if 'sF' in pd_struct.columns:
-				sF = pd_struct['sF'][0]
-			elif 'Fs' in pd_struct.columns:
-				sF = pd_struct['Fs'][0]
-			else:
-				assert True, "you must provide the sampling frequency ('sF')"
-			kwargs['sF'] = sF
+			assert True, "you must provide the sampling frequency ('sF')"
+		kwargs['sF'] = sF
 
 	if 'verbose' in kwargs:
 		verbose = kwargs['verbose']
@@ -134,17 +138,18 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 				if verbose:
 					print(f"{pre_del}{nn_idx+1}/{len(sI_nn_list)}", sep = '', end = '')
 					pre_del =  (len(str(nn_idx+1))+len(str(len(sI_nn_list)))+1)*'\b'
-				temp,_ , _ = sI.compute_structure_index(rates,pos[:,0],10,rates_space,0,nn=nn_val,
-	        													vmin=posLimits[0],vmax=posLimits[1])
+				temp,_ , _, _ = sI.compute_structure_index(rates,pos[:,0],10,n_neighbors=nn_val,
+	        													min_label=posLimits[0],max_label=posLimits[1])
 				sI_kernel[ks_idx, assy_idx, nn_idx] = temp
 
 			#3. Check inner dimension
 			if verbose:
-				print("\n\t\tInner dimension: ",  sep = '', end = '')
-			dim_kernel[ks_idx, assy_idx],_,_ = compute_dim.compute_inner_dim(base_signal=rates,min_neigh=2, 
-																max_neigh = int(rates.shape[0]*0.1))
+				print("\n\t\tABIDS dimension: ",  sep = '', end = '')
+				
+			temp = compute_abids(rates, 50)
+			dim_kernel[ks_idx, assy_idx] = np.nanmean(temp)
 			if verbose and not np.isnan(dim_kernel[ks_idx, assy_idx]):
-				print(f"{dim_kernel[ks_idx, assy_idx]}")
+				print(f"{dim_kernel[ks_idx, assy_idx]:.2f}")
 			    
 	return R2s_kernel, sI_kernel, dim_kernel
 

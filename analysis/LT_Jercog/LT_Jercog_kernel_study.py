@@ -25,10 +25,6 @@ from datetime import datetime
 import base64
 from io import BytesIO
 
-import seaborn as sns
-import pandas as pd
-from kneed import KneeLocator
-
 #%%
 def plot_kernel_study(kernel_dict, save_dir):
     fnames = list(kernel_dict.keys())
@@ -147,8 +143,9 @@ params = {
     'assymetry_list':[False, True],
     'sI_nn_list':[3, 10, 20, 50, 100, 200],
     'verbose': True,
-    'vel_th': 2
+    'vel_th': 3
     }
+
 spikes_field = 'th_spikes'
 traces_field = 'deconvProb'
 
@@ -453,10 +450,10 @@ ax.spines['right'].set_visible(False)
 ax = plt.subplot(1,3,3)
 m = np.nanmean(sI, axis=(2,3))
 sd = np.nanstd(sI, axis=(2,3))/np.sqrt(sI.shape[2]*sI.shape[3])
-ax.plot(m[:,1], c= cpal2[3], label = 'Local')
+ax.plot(m[:,1], c= cpal2[3], label = 'Local: ' + sI_nn[1])
 ax.fill_between(np.arange(len(m[:,1])), m[:,1]-sd[:,1], m[:,1]+sd[:,1], color=cpal2[3], alpha = 0.3)
-ax.plot(m[:,4], c= cpal2[1], label = 'Global')
-ax.fill_between(np.arange(len(m[:,4])), m[:,4]-sd[:,4], m[:,4]+sd[:,4], color= cpal2[1], alpha = 0.3)
+ax.plot(m[:,3], c= cpal2[1], label = 'Global: ' + sI_nn[3])
+ax.fill_between(np.arange(len(m[:,4])), m[:,3]-sd[:,3], m[:,3]+sd[:,3], color= cpal2[1], alpha = 0.3)
 ax.set_xlabel('kernel (ms)', labelpad = -2)
 ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
 ax.set_ylim([0, 1])
@@ -511,10 +508,10 @@ ax.spines['right'].set_visible(False)
 ax = plt.subplot(1,3,3)
 m = np.nanmean(sI, axis=(2,3))
 sd = np.nanstd(sI, axis=(2,3))/np.sqrt(sI.shape[2]*sI.shape[3])
-ax.plot(m[:,1], c= cpal2[0], label = 'Local')
-ax.fill_between(np.arange(len(m[:,1])), m[:,1]-sd[:,1], m[:,1]+sd[:,1], color=cpal2[0], alpha = 0.3)
-ax.plot(m[:,4], '--', c= cpal2[0], label = 'Global')
-ax.fill_between(np.arange(len(m[:,4])), m[:,4]-sd[:,4], m[:,4]+sd[:,4], color= cpal2[0], alpha = 0.3)
+ax.plot(m[:,1], c= cpal2[3], label = 'Local: ' + sI_nn[1])
+ax.fill_between(np.arange(len(m[:,1])), m[:,1]-sd[:,1], m[:,1]+sd[:,1], color=cpal2[3], alpha = 0.3)
+ax.plot(m[:,3], c= cpal2[1], label = 'Global: ' + sI_nn[3])
+ax.fill_between(np.arange(len(m[:,4])), m[:,3]-sd[:,3], m[:,3]+sd[:,3], color= cpal2[1], alpha = 0.3)
 ax.set_xlabel('kernel (ms)', labelpad = -2)
 ax.set_xticks(np.arange(len(m)), labels=kernel_std, rotation = 45)
 ax.axvline(x= 4, color='k', linestyle='--')
