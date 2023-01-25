@@ -96,7 +96,6 @@ end
 
 
 function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condition, fileID)
-
     tracesEvents = struct();
     tracesEvents.test = condition;
     %Load raw traces props to get mapping from "accepted" to "local" cells

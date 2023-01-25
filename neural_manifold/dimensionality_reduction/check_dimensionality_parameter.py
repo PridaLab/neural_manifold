@@ -11,7 +11,6 @@ from neural_manifold import general_utils as gu
 from neural_manifold import decoders as dec 
 
 import sys
-sys.path.append('/media/julio/DATOS/sI_project/structure_index')
 from structure_index import compute_structure_index
 
 from neural_manifold.dimensionality_reduction import validation as dim_validation 
@@ -138,7 +137,7 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 				if verbose:
 					print(f"{pre_del}{nn_idx+1}/{len(sI_nn_list)}", sep = '', end = '')
 					pre_del =  (len(str(nn_idx+1))+len(str(len(sI_nn_list)))+1)*'\b'
-				temp,_ , _, _ = sI.compute_structure_index(rates,pos[:,0],10,n_neighbors=nn_val,
+				temp,_ , _, _ = compute_structure_index(rates,pos[:,0],10,n_neighbors=nn_val, num_shuffles = 0,
 	        													min_label=posLimits[0],max_label=posLimits[1])
 				sI_kernel[ks_idx, assy_idx, nn_idx] = temp
 
@@ -146,7 +145,7 @@ def check_kernel_size(pd_struct, spikes_field, traces_field, **kwargs):
 			if verbose:
 				print("\n\t\tABIDS dimension: ",  sep = '', end = '')
 				
-			temp = compute_abids(rates, 50)
+			temp = compute_dim.compute_abids(rates, 50)
 			dim_kernel[ks_idx, assy_idx] = np.nanmean(temp)
 			if verbose and not np.isnan(dim_kernel[ks_idx, assy_idx]):
 				print(f"{dim_kernel[ks_idx, assy_idx]:.2f}")
@@ -166,19 +165,19 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 	if 'min_dist' in kwargs:
 		min_dist = kwargs['min_dist']
 	else:
-		min_dist = 0.75
+		min_dist = 0.1
 		kwargs['min_dist'] = min_dist
 
 	if 'dim' in kwargs:
 		dim = kwargs['dim']
 	else:
-		dim = 10
+		dim = 8
 		kwargs['dim'] = dim
 
 	if 'max_dim' in kwargs:
 		max_dim = kwargs['max_dim']
 	else:
-		max_dim = 10
+		max_dim = 8
 		kwargs['max_dim'] = max_dim
 
 	if 'decoder_list' in kwargs:
@@ -228,8 +227,12 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 			if verbose:
 				print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
 				pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
-			temp,_ , _ = sI.compute_structure_index(base_signal,label,nbins,og_space,0,nn=sI_nn,
-																vmin=label_lim[0], vmax=label_lim[1])
+			try:
+				temp,_ , _, _ = compute_structure_index(base_signal,label,n_neighbors=sI_nn, num_shuffles = 0,
+																	min_label=label_lim[0], max_label=label_lim[1])
+			except:
+				temp = np.nan
+				continue
 			sI_og[sI_nn_idx,label_idx] = temp
 
 	if verbose:
@@ -271,16 +274,16 @@ def compute_umap_nn(base_signal=None, label_signal = None, trial_signal = None, 
 			if verbose:
 				print(f"\tComputing sI {label_idx+1}/{len(label_list)}: X/X", sep='', end = '')
 				pre_del = '\b'*3
-			if len(np.unique(label))<10:
-				nbins = len(np.unique(label))
-			else:
-				nbins = 10
 			for sI_nn_idx, sI_nn in enumerate(nn_list):
 				if verbose:
 					print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
 					pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
-				temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
-																	vmin=label_lim[0], vmax=label_lim[1])
+				try:
+					temp,_ , _, _ = compute_structure_index(emb_signal,label,n_neighbors=sI_nn, num_shuffles = 0,
+																		min_label=label_lim[0], max_label=label_lim[1])
+				except:
+					temp = np.nan
+					continue
 				sI_emb[nn_idx,sI_nn_idx,label_idx] = temp
 
 		if verbose:
@@ -355,6 +358,7 @@ def compute_umap_dim(base_signal=None, label_signal = None, trial_signal = None,
 		if label.ndim == 2:
 			label = label[:,0]
 		label_list.append(label)
+
 	label_limits = [(np.percentile(label,5), np.percentile(label,95)) for label in label_list]    
 
 	sI_dim = np.zeros((max_dim, len(nn_list), len(label_list)))
@@ -402,17 +406,12 @@ def compute_umap_dim(base_signal=None, label_signal = None, trial_signal = None,
 			if verbose:
 				print(f"\tComputing sI {label_idx+1}/{len(label_list)}: X/X", sep='', end = '')
 				pre_del = '\b'*3
-
-			if len(np.unique(label))<10:
-				nbins = len(np.unique(label))
-			else:
-				nbins = 10
 			for sI_nn_idx, sI_nn in enumerate(nn_list):
 				if verbose:
 					print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
 					pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
-				temp,_ , _ = sI.compute_structure_index(emb_signal,label,nbins,emb_space,0,nn=sI_nn,
-																	vmin=label_lim[0], vmax=label_lim[1])
+				temp,_ , _, _ = compute_structure_index(emb_signal,label,n_neighbors=sI_nn, num_shuffles= 0,
+																	min_label=label_lim[0], max_label=label_lim[1])
 				sI_dim[dim,sI_nn_idx,label_idx] = temp
 			if verbose:
 				print(f" - Mean result: {np.nanmean(sI_dim[dim,:,label_idx]):.2f}")
@@ -533,7 +532,7 @@ def check_rotation_params(pd_struct_pre, pd_struct_rot, signal_field, save_dir, 
 																	vmin=posLimits_p[0],vmax=posLimits_p[1])
 				sI_nn[nn_idx, 0, sI_nn_idx, ite] = temp
 
-				temp,_ , _ = sI.compute_structure_index(emb_r,pos_r[:,0],10,emb_space,0,nn=sI_nn_val,
+				temp,_ , _ = compute_structure_index(emb_r,pos_r[:,0],10,emb_space,0,nn=sI_nn_val,
 																	vmin=posLimits_r[0],vmax=posLimits_r[1])
 				sI_nn[nn_idx, 1, sI_nn_idx, ite] = temp
 

@@ -18,8 +18,8 @@ if len(sys.argv)>4:
 else:
     signal = 'revents_SNR3'
 
-run_abid_here = False
-run_umap_here = False
+run_abid_here = True
+run_umap_here = True
 #__________________________________________________________________________
 #|                                                                        |#
 #|                              1. LOAD DATA                              |#
@@ -270,7 +270,7 @@ plt.close(fig)
 local_starttime = timeit.default_timer()
 print('### 4. ISOMAP ###')
 params = {
-    'n_neigh': 20,
+    'n_neigh': 50,
     'max_dim' :10,
     'verbose': True
 }
@@ -332,5 +332,5 @@ ax.set_xlabel('Dim')
 ax.set_ylabel('Res-var')
 
 plt.savefig(os.path.join(figures_dir, mouse + '_isomap_resvar_plot.svg'), dpi = 400,bbox_inches="tight")
-plt.savefig(os.path.join(figures_dir,mouse + '_isomap_resvar_plot.png'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(figures_dir, mouse + '_isomap_resvar_plot.png'), dpi = 400,bbox_inches="tight")
 plt.close(fig)

@@ -10,12 +10,13 @@ from neural_manifold.pipelines.LT_Jercog_session_length import LT_session_length
 #%% PARAMS
 params = {
     'kernel_std': 0.3,
-    'vel_th': 0.2,
+    'vel_th': 0,
     'kernel_num_std': 5,
     'min_session_len': 6000, #5 min
     'equalize_session_len': True
     }
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
+
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/all/same_len_data/'
 
 #%% M2019
 data_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2019'

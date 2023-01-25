@@ -1,6 +1,6 @@
 close all; clear ; clc;
 %%
-data_file =  'ChZ6_lt_events_s2.mat';
+data_file =  'TGrin2_rot_events_s4.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -152,8 +152,6 @@ while stp == 0
         leftArrival(leftArrival==closerArrivalL) = [];
     else
         visit = visit+1;
-
-
     end
     if visit>length(leftDep); stp = 1; end
 end
@@ -213,7 +211,6 @@ for visit=1:length(leftArrival)
     if ~isempty(index_speed)
         R2L(visit,1) = index_speed(1);
     end
-
     index_speed = leftArrival(visit):min(leftArrival(visit)+int16(tracesEvents.sF),length(tracesEvents.position));
     index_speed = index_speed(tracesEvents.velocity(index_speed)<3);
     if ~isempty(index_speed)
@@ -492,7 +489,7 @@ for ii = 1:size(cState_exp,1)-1
     end
     area([cState_exp(ii,1)/tracesEvents.sF, cState_exp(ii,2)/tracesEvents.sF], [800, 800], 'FaceAlpha', 0.75, 'FaceColor', col)
 end
-plot(t, smoothdata(tracesEvents.velocity, 40, 'gaussian'), 'k', 'LineWidth', 1)
+plot(t, movmean(tracesEvents.velocity, 20), 'k', 'LineWidth', 1)
 xlim([0, 80])
 ylim([0, 100])
 xlabel('Time (s)')
@@ -502,6 +499,7 @@ set(gca,'TickDir','out')
 linkaxes([ax1,ax2],'x');
 
 %% create trial structure
+tracesEvents.velocity = movmean(tracesEvents.velocity, 20);
 for ii = 1:size(cState_exp,1)-1
     trial_data(ii).mouse = tracesEvents.mouse;
     trial_data(ii).date = datetime;

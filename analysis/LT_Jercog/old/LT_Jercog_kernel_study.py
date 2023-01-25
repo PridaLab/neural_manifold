@@ -25,6 +25,7 @@ from datetime import datetime
 import base64
 from io import BytesIO
 from kneed import KneeLocator
+
 #%%
 def plot_kernel_study(kernel_dict, save_dir):
     fnames = list(kernel_dict.keys())
@@ -136,16 +137,9 @@ def plot_kernel_study(kernel_dict, save_dir):
         f.write(html)
     
     return True
-#__________________________________________________________________________
-#|                                                                        |#
-#|                                KERNEL STUDY                            |#
-#|________________________________________________________________________|#
-
 #%% GENERAL PARAMS
-mice_list = ['M2019', 'M2021', 'M2023', 'M2024', 'M2025', 'M2026']
-data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/'
-
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/kernel_study'
+data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data'
 params = {
     'ks_list':[0,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,2,5,10,np.inf],
     'assymetry_list':[False, True],
@@ -156,48 +150,199 @@ params = {
 
 spikes_field = 'ML_spikes'
 traces_field = 'deconvProb'
+
 save_params = {}
 save_params.update(params)
 save_params.update({'spikes_field':spikes_field, 'traces_field':traces_field})
+# %% M2019
+# load data
+file_dir =  os.path.join(data_dir, '2019')
+M2019 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
 
-
-for mouse in mice_list:
-    print('')
-    file_name =  mouse+'_df_dict.pkl'
-    file_path = os.path.join(data_dir,mouse)
-    mouse_dict = gu.load_files(file_path, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
-    fnames = list(mouse_dict.keys())
-    kernel_study_dict = dict()
-    save_name = mouse + '_kernel_study_dict.pkl'
-    for fname in fname_list:
-        print(f"\nWorking on session: {fname}")
-        pd_struct = copy.deepcopy(mouse_dict[fname])
-        #compute hyperparameter study
-        mouse_R2s_kernel, mouse_sI_kernel, mouse_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
-                                                                                  traces_field, **params)
-        #save results
-        kernel_study_dict[fname] = {
-            'R2s': mouse_R2s_kernel,
-            'sI': mouse_sI_kernel,
-            'inner_dim': mouse_dim_kernel,
-            'params': save_params
+fname_list = list(M2019.keys())
+M2019_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2019[fname])
+    #compute hyperparameter study
+    M2019_R2s_kernel, M2019_sI_kernel, M2019_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2019_kernel_study[fname] = {
+        'R2s': M2019_R2s_kernel,
+        'sI': M2019_sI_kernel,
+        'inner_dim': M2019_dim_kernel,
+        'params': save_params
         }
-        save_ks = open(os.path.join(save_dir, save_name), "wb")
-        pickle.dump(kernel_study_dict, save_ks)
-        save_ks.close()
+    save_ks = open(os.path.join(save_dir, "M2019_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2019_kernel_study, save_ks)
+    save_ks.close()
+    
+_ = plot_kernel_study(M2019_kernel_study, save_dir)
 
-        _ = plot_kernel_study(kernel_study_dict, save_dir)
+#%% M2021
+#load data
+file_dir =  os.path.join(data_dir, '2021')
+M2021 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+fname_list = list(M2021.keys())
+M2021_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2021[fname])
+    #compute hyperparameter study
+    M2021_R2s_kernel, M2021_sI_kernel, M2021_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2021_kernel_study[fname] = {
+        'R2s': M2021_R2s_kernel,
+        'sI': M2021_sI_kernel,
+        'inner_dim': M2021_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2021_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2021_kernel_study, save_ks)
+    save_ks.close()
 
-#__________________________________________________________________________
-#|                                                                        |#
-#|                           PLOT KERNEL STUDY                            |#
-#|________________________________________________________________________|#
+_ = plot_kernel_study(M2021_kernel_study, save_dir)
+
+#%% M2022
+'''
+#load data
+file_dir =  '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/data/2022'
+M2022 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(M2022.keys())
+M2022_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2022[fname])
+    #compute hyperparameter study
+    M2022_R2s_kernel, M2022_sI_kernel, M2022_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2022_kernel_study[fname] = {
+        'R2s': M2022_R2s_kernel,
+        'sI': M2022_sI_kernel,
+        'inner_dim': M2022_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2022_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2022_kernel_study, save_ks)
+    save_ks.close()
+
+_ = plot_kernel_study(M2022_kernel_study, save_dir)
+'''
+#%% M2023
+#load data
+file_dir =  os.path.join(data_dir, '2023')
+M2023 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(M2023.keys())
+M2023_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2023[fname])
+    #compute hyperparameter study
+    M2023_R2s_kernel, M2023_sI_kernel, M2023_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2023_kernel_study[fname] = {
+        'R2s': M2023_R2s_kernel,
+        'sI': M2023_sI_kernel,
+        'inner_dim': M2023_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2023_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2023_kernel_study, save_ks)
+    save_ks.close()
+
+_ = plot_kernel_study(M2023_kernel_study, save_dir)
+
+#%% M2024
+#load data
+file_dir =  os.path.join(data_dir, '2024')
+M2024 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(M2024.keys())
+M2024_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2024[fname])
+    #compute hyperparameter study
+    M2024_R2s_kernel, M2024_sI_kernel, M2024_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2024_kernel_study[fname] = {
+        'R2s': M2024_R2s_kernel,
+        'sI': M2024_sI_kernel,
+        'inner_dim': M2024_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2024_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2024_kernel_study, save_ks)
+    save_ks.close()
+
+_ = plot_kernel_study(M2024_kernel_study, save_dir)
+
+#%% M2025
+#load data
+file_dir =  os.path.join(data_dir, '2025')
+M2025 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(M2025.keys())
+M2025_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2025[fname])
+    #compute hyperparameter study
+    M2025_R2s_kernel, M2025_sI_kernel, M2025_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2025_kernel_study[fname] = {
+        'R2s': M2025_R2s_kernel,
+        'sI': M2025_sI_kernel,
+        'inner_dim': M2025_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2025_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2025_kernel_study, save_ks)
+    save_ks.close()
+
+_ = plot_kernel_study(M2025_kernel_study, save_dir)
+
+#%% M2026
+#load data
+file_dir =  os.path.join(data_dir, '2026')
+M2026 = gu.load_files(file_dir, '*_PyalData_struct.mat', verbose = True, struct_type = "PyalData")
+
+fname_list = list(M2026.keys())
+M2026_kernel_study = dict()
+for fname in fname_list:
+    print(f"\nWorking on session: {fname}")
+    pd_struct = copy.deepcopy(M2026[fname])
+    #compute hyperparameter study
+    M2026_R2s_kernel, M2026_sI_kernel, M2026_dim_kernel = dim_red.check_kernel_size(pd_struct, spikes_field, 
+                                                                              traces_field, **params)
+    #save results
+    M2026_kernel_study[fname] = {
+        'R2s': M2026_R2s_kernel,
+        'sI': M2026_sI_kernel,
+        'inner_dim': M2026_dim_kernel,
+        'params': save_params
+        }
+    save_ks = open(os.path.join(save_dir, "M2026_kernel_study_dict.pkl"), "wb")
+    pickle.dump(M2026_kernel_study, save_ks)
+    save_ks.close()
+
+_ = plot_kernel_study(M2026_kernel_study, save_dir)
 
 #%% LOAD DATA
 if "M2019_kernel_study" not in locals():
     M2019_kernel_study = gu.load_files(save_dir, '*M2019_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_kernel_study" not in locals():
     M2021_kernel_study = gu.load_files(save_dir, '*M2021_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
+if "M2022_kernel_study" not in locals():
+    M2022_kernel_study = gu.load_files(save_dir, '*M2022_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2023_kernel_study" not in locals():
     M2023_kernel_study = gu.load_files(save_dir, '*M2023_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2024_kernel_study" not in locals():
@@ -206,7 +351,7 @@ if "M2025_kernel_study" not in locals():
     M2025_kernel_study = gu.load_files(save_dir, '*M2025_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")  
 if "M2026_kernel_study" not in locals():
     M2026_kernel_study = gu.load_files(save_dir, '*M2026_kernel_study_dict.pkl', verbose=True, struct_type = "pickle")  
-
+    
 #%% PLOT 1. 
 #Get kernel with better decoding performance
 assymetry = 1
@@ -228,6 +373,13 @@ for s_idx, s_name in enumerate(M2021_kernel_study.keys()):
     R2s[:,:,s_idx,1] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
     idim[:,s_idx,1] = pd_struct["inner_dim"][:,assymetry]
     sI[:,:, s_idx,0] = pd_struct["sI"][:,assymetry,:]
+'''    
+for s_idx, s_name in enumerate(M2022_kernel_study.keys()):
+    pd_struct = M2022_kernel_study[s_name]
+    R2s[:,:,s_idx,2] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)
+    idim[:,s_idx,2] = pd_struct["inner_dim"][:,assymetry]
+    sI[:,:, s_idx,2] = pd_struct["sI"][:,assymetry,:]
+'''
 for s_idx, s_name in enumerate(M2023_kernel_study.keys()):
     pd_struct = M2023_kernel_study[s_name]
     R2s[:,:,s_idx,2] = np.mean(pd_struct["R2s"][:, assymetry,:,:], axis=1)

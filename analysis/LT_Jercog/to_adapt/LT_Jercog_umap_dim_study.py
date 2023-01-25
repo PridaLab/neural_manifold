@@ -75,14 +75,27 @@ def plot_umap_dim_study(dim_dict, save_dir):
                          rotation = 'vertical', verticalalignment='center', fontsize = 20)
         
         ax = plt.subplot(1,4,1)
-        b = ax.imshow(dim_dict[file_name]['sI'][:,:,0].T, vmin = sI_vmin, vmax = sI_vmax, aspect = 'auto')
-        ax.set_title(f"sI: {dim_dict[file_name]['params']['label_name'][0]}",fontsize=15)
-        ax.set_ylabel('sI nn', labelpad = 5)
-        ax.set_xlabel('dim', labelpad = -5)
-        ax.set_yticks(np.arange(len(ytick_labels)), labels=ytick_labels)
-        ax.set_xticks(xtick_labels, labels=xtick_labels+1)
-        fig.colorbar(b, ax=ax, location='right', anchor=(0, 0.3), shrink=1)
-        
+        if dim_dict[file_name]['sI'].shape[2]==1:
+            b = ax.imshow(dim_dict[file_name]['sI'][:,:,0].T, vmin = sI_vmin, vmax = sI_vmax, aspect = 'auto')
+            ax.set_title(f"sI: {dim_dict[file_name]['params']['label_name'][0]}",fontsize=15)
+            ax.set_ylabel('sI nn', labelpad = 5)
+            ax.set_xlabel('dim', labelpad = -5)
+            ax.set_yticks(np.arange(len(ytick_labels)), labels=ytick_labels)
+            ax.set_xticks(xtick_labels, labels=xtick_labels+1)
+            fig.colorbar(b, ax=ax, location='right', anchor=(0, 0.3), shrink=1)
+        else:
+            for idx in range(dim_dict[file_name]['sI'].shape[2]dim_dict[file_name]['sI'].shape[2]):
+                ax.plot(dim_dict[file_name]['sI'][:,1,idx], label = dim_dict[file_name]['params']['label_name'][idx])
+
+            ax.set_xlabel('dim', labelpad = -5)
+            ax.set_xticks(xtick_labels, labels=xtick_labels+1, rotation = 90)
+
+            ax.set_ylabel('sI', labelpad = 5)
+            ax.set_yticks([0, 0.25, 0.5, 1])
+            ax.set_ylim([-0.05, 1.1])
+            ax.legend()
+            ax.set_title(f"sI nn: {dim_dict[file_name]['params']['nn_list'][1]}",fontsize=15)
+            
         ax = plt.subplot(1,4,2)
         b = ax.imshow(dim_dict[file_name]['trust'][:,:].T, vmin = trust_vmin, vmax = trust_vmax, aspect = 'auto')
         ax.set_title("Trustworthiness",fontsize=15)
@@ -143,25 +156,27 @@ def plot_umap_dim_study(dim_dict, save_dir):
     
     return True
 #%% GENERAL PARAMS
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/dim'
 params = {
-    'nn_list': [3, 10, 20, 30, 60, 120, 200, 500, 1000],
-    'max_dim': 12,
+    'nn_list': [20, 60, 100, 200],
+    'max_dim': 8,
     'verbose': True,
     'n_splits': 5,
-    'nn': 120
+    'nn': 60
     }
-signal_name = 'deconvProb'
-label_names = ['posx']
+label_names = ['posx', 'dir_mat', 'posy', 'vel']
+
+signal_name = 'rawProb'
+case = 'raw_traces'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/' + case + '/umap_params_study/dim'
+file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 
 #%% M2019
 #load data
-f = open(os.path.join(save_dir,'M2019_umap_ncells_logFile.txt'), 'w')
+f = open(os.path.join(save_dir,'M2019_umap_dim_logFile.txt'), 'w')
 original = sys.stdout
 sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2019 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2019' in f]
 M2019 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2019_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -171,6 +186,10 @@ M2019_umap_dim = dict()
 for f_idx, fname in enumerate(fname_list):
     print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
     pd_struct = copy.deepcopy(M2019[fname])
+    if 'dir_mat' not in pd_struct.columns:
+        pd_struct["dir_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1)).astype(int)+
+                        ('L' == pd_struct["dir"][idx])+ 2*('R' == pd_struct["dir"][idx])
+                        for idx in pd_struct.index]
     #compute hyperparameter study
     m_trust, m_cont, m_sI, m_R2s, m_params = dim_red.compute_umap_dim(pd_object = pd_struct, 
                                                      base_signal = signal_name, label_signal = label_names,
@@ -202,7 +221,6 @@ sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2021 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2021' in f]
 M2021 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2021_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -236,40 +254,6 @@ sys.stdout = original
 f.close()
 _ = plot_umap_dim_study(M2021_umap_dim, save_dir)
 
-#%% M2022
-'''
-#load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
-sub_dir = next(os.walk(file_dir))[1]
-foi = [f for f in sub_dir if 'M2022' in f]
-M2022 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2022_df_dict.pkl', verbose = True, struct_type = "pickle")
-
-fname_list = list(M2022.keys())
-M2022_umap_dim = dict()
-for f_idx, fname in enumerate(fname_list):
-    print(f"\nWorking on session: {fname} ({f_idx+1}/{len(fname_list)})")
-    pd_struct = copy.deepcopy(M2022[fname])
-    #compute hyperparameter study
-    m_trust, m_cont, m_sI, m_R2s, m_params = dim_red.compute_umap_dim(pd_object = pd_struct, 
-                                                     base_signal = signal_name, label_signal = label_names,
-                                                     trial_signal = "index_mat", **params)
-    m_params['base_name'] = signal_name
-    m_params['label_name'] = label_names
-    #save results
-    M2022_umap_dim[fname] = {
-        'trust': m_trust,
-        'cont': m_cont,
-        'sI': m_sI,
-        'R2s': m_R2s,
-        'params': m_params
-        }
-    
-    save_ks = open(os.path.join(save_dir, "M2022_umap_dim_dict.pkl"), "wb")
-    pickle.dump(M2022_umap_dim, save_ks)
-    save_ks.close()
-    
-_ = plot_umap_dim_study(M2022_umap_dim, save_dir)
-'''
 #%% M2023
 f = open(os.path.join(save_dir,'M2023_umap_ncells_logFile.txt'), 'w')
 original = sys.stdout
@@ -277,7 +261,6 @@ sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2023 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2023' in f]
 M2023 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2023_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -318,7 +301,6 @@ sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2024 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2024' in f]
 M2024 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2024_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -359,7 +341,6 @@ sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2025 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2025' in f]
 M2025 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2025_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -397,7 +378,6 @@ sys.stdout = gu.Tee(sys.stdout, f)
 print(f"M2026 umap dims: {datetime.now().strftime('%d/%m/%y %H:%M:%S')}\n")
 
 #load data
-file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
 sub_dir = next(os.walk(file_dir))[1]
 foi = [f for f in sub_dir if 'M2026' in f]
 M2026 = gu.load_files(os.path.join(file_dir, foi[0]), '*M2026_df_dict.pkl', verbose = True, struct_type = "pickle")
@@ -433,7 +413,6 @@ _ = plot_umap_dim_study(M2026_umap_dim, save_dir)
 
 #%%
 save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/inner_dim'
-
 if "M2019_inner_dim" not in locals():
     M2019_inner_dim = gu.load_files(save_dir, '*M2019_inner_dim.pkl', verbose=True, struct_type = "pickle")
 if "M2021_inner_dim" not in locals():
@@ -447,7 +426,6 @@ if "M2025_inner_dim" not in locals():
 if "M2026_inner_dim" not in locals():
     M2026_inner_dim = gu.load_files(save_dir, '*M2026_inner_dim.pkl', verbose=True, struct_type = "pickle")  
     
-save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/traces/umap_params_study/dim'
 if "M2019_umap_dim" not in locals():
     M2019_umap_dim = gu.load_files(save_dir, '*M2019_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_umap_dim" not in locals():

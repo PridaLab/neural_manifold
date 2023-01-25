@@ -2,7 +2,8 @@ import os, subprocess
 # mice = ["CZ3","CZ4", "CZ6", "CZ7", "CZ8", "CZ9", "GC2", "GC3", "GC4_nvista", "GC5_nvista", "DDC", "ChZ2", "ChZ4", "ChZ6", "DDA"]
 data_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/data/'
 save_dir = '/media/julio/DATOS/spatial_navigation/JP_data/LT_inscopix/results/'
-mice = ["CZ3","CZ4", "CZ6", "CZ7", "CZ8"]
+#mice = ["CZ3","CZ4", "CZ6", "CZ7", "CZ8"]
+mice = ["CZ9", "GC2", "GC3", "GC4_nvista", "GC5_nvista", "DDC", "ChZ2", "ChZ4", "ChZ6", "DDA"]
 
 print(os.path.abspath(''))
 os.chdir('/media/julio/DATOS/spatial_navigation/GitHub_SN/neural_manifold/analysis/LT_DeepSup/')

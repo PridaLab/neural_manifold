@@ -28,7 +28,7 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
     ----------
     pos_signal : TYPE, optional
         DESCRIPTION. The default is None.
-   spikes_signal : TYPE, optional
+    spikes_signal : TYPE, optional
         DESCRIPTION. The default is None.
     dim : TYPE, optional
         DESCRIPTION. The default is 2.
@@ -362,9 +362,14 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cel
                 
             ax  = plt.subplot2grid((cells_per_row*6, cells_per_col), (row_idx*6, col_idx), rowspan=2)
             ax.plot(pos[:,0], pos[:,1], color = [.5,.5,.5], alpha = 0.3)
-            color= ['C9' if l == 1 else 'C1' for l in direction[neu_sig[:,gcell_idx]>0]]
-            ax.scatter(*pos[neu_sig[:,gcell_idx]>0,:2].T, c = color, s= 5)
-
+            if len(np.unique(neu_sig[:,gcell_idx]))==2:
+                color= ['C9' if l == 1 else 'C1' for l in direction[neu_sig[:,gcell_idx]>0]]
+                ax.scatter(*pos[neu_sig[:,gcell_idx]>0,:2].T, c = color, s= 5)
+            else:
+                idxs = np.argsort(neu_sig[:,gcell_idx], axis = 0)
+                temp_pos = pos[idxs,:2]    
+                temp_signal = neu_sig[idxs,gcell_idx]
+                ax.scatter(*temp_pos.T, c = temp_signal, s= 5, alpha=0.3)
             ax.set_xlim([min_pos[0], max_pos[0]])
             ax.set_ylim([min_pos[1], max_pos[1]])
             title = list()
