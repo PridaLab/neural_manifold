@@ -1,5 +1,4 @@
 from ripser import ripser as tda
-from neural_manifold import general_utils as gu
 import os, copy
 from sklearn.metrics import pairwise_distances
 import numpy as np
