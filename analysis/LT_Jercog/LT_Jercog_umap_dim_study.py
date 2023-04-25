@@ -52,8 +52,8 @@ def plot_umap_dim_study(dim_dict, save_dir):
     R2s_vmax = np.zeros((4,1))
     
     for file_idx, file_name in enumerate(fnames):
-        sI_vmin = np.nanmin([sI_vmin, np.min(dim_dict[file_name]['sI'], axis= (0,1))])
-        sI_vmax = np.nanmax([sI_vmax, np.max(dim_dict[file_name]['sI'], axis= (0,1))])
+        sI_vmin = np.nanmin([sI_vmin, np.min(dim_dict[file_name]['sI'], axis= (0,1,2))])
+        sI_vmax = np.nanmax([sI_vmax, np.max(dim_dict[file_name]['sI'], axis= (0,1,2))])
         
         trust_vmin = np.nanmin([trust_vmin, np.min(dim_dict[file_name]['trust'], axis= (0,1))])
         trust_vmax = np.nanmax([trust_vmax, np.max(dim_dict[file_name]['trust'], axis= (0,1))])
@@ -131,16 +131,17 @@ def plot_umap_dim_study(dim_dict, save_dir):
                 m = np.nanmean(dim_dict[file_name]['R2s'][:,:,l_idx,ii], axis=1)
                 sd = np.nanstd(dim_dict[file_name]['R2s'][:,:,l_idx,ii], axis=1)
                 
-                ax.plot(m, c = cpal[2], label = ln)
-                ax.fill_between(np.arange(len(m)), m-sd, m+sd, color = cpal[2], alpha = 0.3)
+                ax.plot(m, label = ln)
+                ax.fill_between(np.arange(len(m)), m-sd, m+sd, alpha = 0.3)
                 
         
-            ax.set_xlabel('nn', labelpad = -2)
+            ax.set_xlabel('dim', labelpad = -2)
             ax.set_xticks(xtick_labels, labels=xtick_labels+1, rotation = 90)
             ax.set_ylim([R2s_vmin, R2s_vmax[ii,0]])
             ax.set_yticks([R2s_vmin, R2s_vmax[0,0]/2, R2s_vmax[0,0]])
             ax.set_ylabel('R2s error', labelpad = 0)
             ax.set_title(dec_list[ii])
+            ax.legend()
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
                 
@@ -224,21 +225,6 @@ for mouse in mice_list:
 #|                                                                        |#
 #|                          PLOT UMAP DIM STUDY                            |#
 #|________________________________________________________________________|#
-#%%
-# save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/spikes/inner_dim'
-# if "M2019_inner_dim" not in locals():
-#     M2019_inner_dim = gu.load_files(save_dir, '*M2019_inner_dim.pkl', verbose=True, struct_type = "pickle")
-# if "M2021_inner_dim" not in locals():
-#     M2021_inner_dim = gu.load_files(save_dir, '*M2021_inner_dim.pkl', verbose=True, struct_type = "pickle")
-# if "M2023_inner_dim" not in locals():
-#     M2023_inner_dim = gu.load_files(save_dir, '*M2023_inner_dim.pkl', verbose=True, struct_type = "pickle")
-# if "M2024_inner_dim" not in locals():
-#     M2024_inner_dim = gu.load_files(save_dir, '*M2024_inner_dim.pkl', verbose=True, struct_type = "pickle")
-# if "M2025_inner_dim" not in locals():
-#     M2025_inner_dim = gu.load_files(save_dir, '*M2025_inner_dim.pkl', verbose=True, struct_type = "pickle")  
-# if "M2026_inner_dim" not in locals():
-#     M2026_inner_dim = gu.load_files(save_dir, '*M2026_inner_dim.pkl', verbose=True, struct_type = "pickle")  
-    
 if "M2019_umap_dim" not in locals():
     M2019_umap_dim = gu.load_files(save_dir, '*M2019_umap_dim_dict.pkl', verbose=True, struct_type = "pickle")
 if "M2021_umap_dim" not in locals():
@@ -303,7 +289,7 @@ def get_dim_results(umap_dim_dict, session_list):
             if kl.knee:
                 meanh_dim[nn,count_idx,session_list[last_idx]] = kl.knee
              
-        last_nn = [0,1]
+        last_nn = [1,3]
         kl = KneeLocator(np.arange(max_dim)+1, np.nanmean(pd_struct["trust"][:,last_nn],axis = 1), curve = "concave", direction = "increasing")
         if kl.knee:
             ttrust_dim[-1,count_idx,session_list[last_idx]] = kl.knee  
@@ -346,7 +332,7 @@ cont[:,:,:,3], cont_dim[:,:,3],trust[:,:,:,3], trust_dim[:,:,3], meanh_dim[:,:,3
 cont[:,:,:,4], cont_dim[:,:,4],trust[:,:,:,4], trust_dim[:,:,4], meanh_dim[:,:,4], sI[:,:,:,4], R2s[:,:,:,4] = get_dim_results(M2025_umap_dim, [0,1,2,3])
 #M2026
 cont[:,:,:,5], cont_dim[:,:,5],trust[:,:,:,5], trust_dim[:,:,5], meanh_dim[:,:,5], sI[:,:,:,5], R2s[:,:,:,5] = get_dim_results(M2026_umap_dim, [0,1,2,3])
-
+meanh = 2*cont*trust/(cont+trust)
 #%%
 nns =1
 pd_umap_dim = pd.DataFrame(data={'Day': ['Day1', 'Day2-m', 'Day2-e', 'Day4', 'Day7']*(trust_dim.shape[-1])*3,
@@ -355,70 +341,18 @@ pd_umap_dim = pd.DataFrame(data={'Day': ['Day1', 'Day2-m', 'Day2-e', 'Day4', 'Da
                                  ['harmonic_mean']*(meanh_dim.shape[-1]*meanh_dim.shape[-2]),
                                  'Index': np.concatenate((trust_dim[nns,:,:].T.reshape(-1,1).T, cont_dim[nns,:,:].T.reshape(-1,1).T, meanh_dim[nns,:,:].T.reshape(-1,1).T), axis = 1)[0,:]})
 #%%
-
-# def get_inner_dim_results(inner_dim_dict, session_list):
-#     lower_bound = 2
-#     upper_bound = 7
-    
-#     tinner_dim = np.zeros((3,5))*np.nan
-#     tneigh_all = np.zeros((1000,3,5))*np.nan
-#     tradius_all = np.zeros((1000,3,5))*np.nan
-
-#     fnames = list(inner_dim_dict.keys())
-    
-#     last_idx = -1
-#     for s_idx, s_name in enumerate(fnames):
-#         if s_idx==0:
-#             last_idx+=1
-#             count_idx = 0
-#         else:
-#             old_s_name = fnames[s_idx-1]
-#             old_s_name = old_s_name[:old_s_name.find('_',-5)]
-#             new_s_name = s_name[:s_name.find('_',-5)]
-#             if new_s_name == old_s_name:
-#                 count_idx += 1
-#             else:
-#                 last_idx +=1
-#                 count_idx = 0
-                
-#         pd_struct = inner_dim_dict[s_name]
-#         tneigh = pd_struct["neigh"]
-#         tradius = pd_struct["radius"]
-        
-#         tneigh_all[:tneigh.shape[0],count_idx, session_list[last_idx]] = tneigh[:,0]
-#         tradius_all[:tradius.shape[0],count_idx, session_list[last_idx]] = tradius[:,0]
-
-#         in_range_mask = np.all(np.vstack((tneigh[:,0]<upper_bound, tneigh[:,0]>lower_bound)).T, axis=1)
-#         radius_in_range = tradius[in_range_mask, :] 
-#         neigh_in_range = tneigh[in_range_mask, :]
-#         m = linregress(radius_in_range[:,0], neigh_in_range[:,0])[0]
-        
-#         tinner_dim[count_idx, session_list[last_idx]] =m
-#     return np.nanmean(tinner_dim, axis = 0), np.nanmean(tneigh_all, axis = 1),np.nanmean(tradius_all, axis = 1)
-
-
-# inner_dim = np.zeros((5,6))
-# radius_dim = np.zeros((1000, 5,6))
-# neigh_dim = np.zeros((1000, 5,6))
-
-# inner_dim[:,0], neigh_dim[:,:,0], radius_dim[:,:,0] = get_inner_dim_results(M2019_inner_dim,[0,1,2,4] )
-# inner_dim[:,1], neigh_dim[:,:,1], radius_dim[:,:,1] = get_inner_dim_results(M2021_inner_dim,[0,1,2,4] )
-# inner_dim[:,2], neigh_dim[:,:,2], radius_dim[:,:,2] = get_inner_dim_results(M2023_inner_dim,[0,1,2,4] )
-
-# inner_dim[:,3], neigh_dim[:,:,3], radius_dim[:,:,3] = get_inner_dim_results(M2024_inner_dim,[0,1,2,3] )
-# inner_dim[:,4], neigh_dim[:,:,4], radius_dim[:,:,4] = get_inner_dim_results(M2025_inner_dim,[0,1,2,3] )
-# inner_dim[:,5], neigh_dim[:,:,5], radius_dim[:,:,5] = get_inner_dim_results(M2026_inner_dim,[0,1,2,3] )
-
-
-# pd_inner_dim = pd.DataFrame(data={'Day': ['Day1', 'Day2-m', 'Day2-e', 'Day4', 'Day7']*(inner_dim.shape[-1]),
-#                                     'slope':inner_dim.T.reshape(-1,1).T[0,:]})
+pd_umap_dim_v2 = pd.DataFrame(data={'Day': ['Day1', 'Day2-m', 'Day2-e', 'Day4', 'Day7']*(trust_dim.shape[-1])*3,
+                                 'Measurement': ['trustworthiness']*(trust.shape[-1]*trust_dim.shape[-2]) + 
+                                 ['continuity']*(cont_dim.shape[-1]*cont_dim.shape[-2]) +
+                                 ['harmonic_mean']*(meanh_dim.shape[-1]*meanh_dim.shape[-2]),
+                                 'Index': np.concatenate((trust[3,nns,:,:].T.reshape(-1,1).T, cont[3,nns,:,:].T.reshape(-1,1).T, meanh[3,nns,:,:].T.reshape(-1,1).T), axis = 1)[0,:]})
 #%%
 cpal = ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500", "#EE90FC"]
 x_space = [1,2,2.5,4,7]
 dim_space = np.arange(max_dim)+1
 dec_name = ["wf", "wc", "xgb", "svm"]
-nn_list = M2021_umap_nn[list(M2021_umap_nn.keys())[0]]["params"]["nn_list"]
-lidx = 0
+nn_list = M2021_umap_dim[list(M2021_umap_dim.keys())[0]]["params"]["nn_list"]
+lidx = 1
 gidx = 3
 
 #%%
@@ -435,9 +369,10 @@ ax.set_xticks(dim_space)
 ax.set_xlabel('Dimension')
 ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
-ax.axvline(x= 3, color='k', linestyle='--')
+ax.axvline(x= 4, color='k', linestyle='--')
 ax.set_ylim([0.75,1.02])
 ax.legend()
+
 
 ax = plt.subplot(2,3,2)
 m = np.nanmean(cont, axis = (2,3))
@@ -449,50 +384,40 @@ ax.fill_between(dim_space, m[:,gidx]-sd[:,gidx], m[:,gidx]+sd[:,gidx], color = c
 ax.set_ylabel('Continuity', size=12)
 ax.set_xticks(dim_space)
 ax.set_xlabel('Dimension')
-ax.axvline(x= 3, color='k', linestyle='--')
+ax.axvline(x= 4, color='k', linestyle='--')
 ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
 ax.legend()
 ax.set_ylim([0.75,1.02])
 
-
-# ax = plt.subplot(2,3,3)
-# sns.barplot(ax=ax, x='Day', y='slope', data = pd_inner_dim, color =cpal[0])
-# ax.axhline(y=3, color='k', linestyle= '--')
-# ax.set_ylabel('Inner dimension', size=12)
-# ax.set_ylim([0,4.5])
-# ax.set_xlabel('Day')
-
-ax = plt.subplot(2,3,4)
-m = np.nanmean(trust, axis = (2,3))
-sd = np.nanstd(trust, axis = (2,3))
-ax.plot(dim_space, m[:,0], color = cpal[1], label = 'trustworthiness')
-ax.fill_between(dim_space, m[:,nns]-sd[:,nns], m[:,nns]+sd[:,nns], color = cpal[1], alpha=0.3)
-                   
-m = np.nanmean(cont, axis = (2,3))
-sd = np.nanstd(cont, axis = (2,3))
-ax.plot(dim_space, m[:,nns], color = cpal[4], label = 'continuity')
-ax.fill_between(dim_space, m[:,nns]-sd[:,nns], m[:,nns]+sd[:,nns], color = cpal[4], alpha=0.3)
-
-val = (2*trust[:,nns,:,:]*cont[:,nns,:,:])/(trust[:,nns,:,:]+cont[:,nns,:,:])
-m = np.nanmean(val, axis = (1,2))
-sd = np.nanstd(val, axis = (1,2))
-ax.plot(dim_space, m, color = cpal[-1], label = 'HM')
-ax.fill_between(dim_space, m-sd, m+sd, color = cpal[-1], alpha=0.3)
-
-ax.set_ylabel('Index', size=12)
+ax = plt.subplot(2,3,3)
+m = np.nanmean(meanh, axis = (2,3))
+sd = np.nanstd(meanh, axis = (2,3))
+ax.plot(dim_space, m[:,lidx], color = cpal[-1], label = f'local nn: {nn_list[lidx]}')
+ax.fill_between(dim_space, m[:,lidx]-sd[:,lidx], m[:,lidx]+sd[:,lidx], color = cpal[-1], alpha=0.3)
+ax.plot(dim_space, m[:,gidx], color = cpal[-1], linestyle='--', label = f'Global nn: {nn_list[gidx]}')
+ax.fill_between(dim_space, m[:,gidx]-sd[:,gidx], m[:,gidx]+sd[:,gidx], color = cpal[-1], alpha=0.3)
+ax.set_ylabel('Continuity', size=12)
 ax.set_xticks(dim_space)
 ax.set_xlabel('Dimension')
+ax.axvline(x= 4, color='k', linestyle='--')
 ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
-ax.axvline(x= 3, color='k', linestyle='--')
-ax.set_ylim([0.75,1.02])
 ax.legend()
+ax.set_ylim([0.75,1.02])
+
+ax = plt.subplot(2,3,4)
+sns.barplot(ax=ax, x='Day', y='Index', hue = 'Measurement', data = pd_umap_dim_v2)
+ax.set_ylabel('Index', size=12)
+ax.axhline(y=1, color='k', linestyle= '--')
+# ax.set_yticks([0,1,2,3,4])
+ax.set_ylim([0.8,1.05])
+ax.set_xlabel('Day')
 
 ax = plt.subplot(2,3,5)
 sns.barplot(ax=ax, x='Day', y='Index', hue = 'Measurement', data = pd_umap_dim)
 ax.set_ylabel('Estimated dimension', size=12)
-ax.axhline(y=3, color='k', linestyle= '--')
+ax.axhline(y=4, color='k', linestyle= '--')
 ax.set_yticks([0,1,2,3,4])
 ax.set_ylim([0,4.5])
 ax.set_xlabel('Day')
@@ -513,7 +438,7 @@ for dec_idx in range(4):
     ax.set_ylim([0, 25])
     ax.set_yticks([0, 12.5, 25])
     ax.set_ylabel('error xpos [cm]', labelpad = 5)
-    ax.axvline(x= 3, color='k', linestyle='--')
+    ax.axvline(x= 4, color='k', linestyle='--')
     ax.set_title(dec_name[dec_idx])
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)

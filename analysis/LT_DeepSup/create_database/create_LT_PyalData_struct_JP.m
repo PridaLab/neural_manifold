@@ -1,6 +1,6 @@
 close all; clear ; clc;
 %%
-data_file =  'CGrin1_lt_events_s2.mat';
+data_file =  'GC2_lt_events_s1.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -43,8 +43,8 @@ if sum(contains(fieldnames(tracesEvents), 'ceroxy', 'IgnoreCase',true))==0
     tracesEvents.position(:,1) = tracesEvents.position(:,1) -tracesEvents.ceroXY(1);
     tracesEvents.position(:,2) = tracesEvents.position(:,2) -tracesEvents.ceroXY(2);
 end
-leftLim = 6;
-rightLim = 60;
+leftLim = 5;
+rightLim = 65;
 %{
 leftLim = mean(leftLim.Position(:,1));
 rightLim = mean(rightLim.Position(:,1));
@@ -448,6 +448,18 @@ if cState_exp(end,2)<size(tracesEvents.position,1)
     cState_exp = [cState_exp; cState_exp(end,2)+1, size(tracesEvents.position,1), 0];
 end
 %% Plot
+
+tracesEvents.velocity = movmean(tracesEvents.velocity, 20);
+still_vel = [];
+for ii = 1:size(cState_exp,1)-1
+    if cState_exp(ii,3) == 0
+        still_vel = [still_vel; tracesEvents.velocity(cState_exp(ii,1):cState_exp(ii,2))];
+    end
+end
+min_vel = prctile(still_vel, 20);
+tracesEvents.velocity = tracesEvents.velocity - min_vel;
+tracesEvents.velocity(tracesEvents.velocity<0) = 0;
+
 t = (0:size(tracesEvents.position,1)-1)'./tracesEvents.sF;
 figure
 ax1 = subplot(1,2,1);
@@ -489,7 +501,7 @@ for ii = 1:size(cState_exp,1)-1
     end
     area([cState_exp(ii,1)/tracesEvents.sF, cState_exp(ii,2)/tracesEvents.sF], [800, 800], 'FaceAlpha', 0.75, 'FaceColor', col)
 end
-plot(t, movmean(tracesEvents.velocity, 20), 'k', 'LineWidth', 1)
+plot(t, tracesEvents.velocity, 'k', 'LineWidth', 1)
 xlim([0, 80])
 ylim([0, 100])
 xlabel('Time (s)')
@@ -497,19 +509,16 @@ ylabel('Velocity (cm/s)')
 set(gca,'FontSize',20)
 set(gca,'TickDir','out')
 linkaxes([ax1,ax2],'x');
-
+savefig([tracesEvents.mouse, '_', tracesEvents.test, '_s', int2str(tracesEvents.session), '_beh.fig'])
 %% create trial structure
-tracesEvents.velocity = movmean(tracesEvents.velocity, 20);
 for ii = 1:size(cState_exp,1)-1
     trial_data(ii).mouse = tracesEvents.mouse;
     trial_data(ii).date = datetime;
     trial_data(ii).task = 'Linear-Track';
     trial_data(ii).session =  tracesEvents.session;
-
     trial_data(ii).trial_id = ii;
     trial_data(ii).mov = double(cState_exp(ii,2)>0);
     trial_data(ii).cross_middle =  double(cState_exp(ii,3)>0);
-
     if cState_exp(ii,3) == 1
         trial_data(ii).dir = 'L';
     elseif cState_exp(ii,3) == 2
@@ -534,7 +543,7 @@ for ii = 1:size(cState_exp,1)-1
     trial_data(ii).vel = tracesEvents.velocity(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).raw_traces = tracesEvents.raw_traces(cState_exp(ii,1):cState_exp(ii,2),:);
     trial_data(ii).denoised_traces = tracesEvents.denoised_traces(cState_exp(ii,1):cState_exp(ii,2),:);
-
+%     trial_data(ii).conv_traces = tracesEvents.conv_traces(cState_exp(ii,1):cState_exp(ii,2),:);
     fields = fieldnames(tracesEvents);
     spike_fields = fields(contains(fields,'spikes_'));
     for idx = 1:length(spike_fields)

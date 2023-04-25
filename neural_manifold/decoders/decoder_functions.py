@@ -25,7 +25,7 @@ warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-da
 @gu.check_inputs_for_pd
 def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = None,
                     trial_signal = None, decoder_list = ["wf", "wc", "xgb", "svr"],
-                    n_dims = 10, n_splits=10, verbose = False):  
+                    n_dims = 10, n_splits=10, min_dist = 0.1, verbose = False):  
     
     """Train decoders on x-base signal (and on projected one if indicated) to 
     predict a 1D y-signal.
@@ -155,7 +155,7 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
             if 'umap' in emb:
                 if isinstance(nn, type(None)):
                     nn = np.round(X_base_train.shape[0]*0.01).astype(int)
-                model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=0.75)
+                model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=min_dist)
             elif 'iso' in emb:
                 if isinstance(nn, type(None)):
                     nn = np.round(X_base_train.shape[0]*0.01).astype(int)
@@ -171,7 +171,7 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
             for y_idx in range(len(y_signal_list)):
                 for decoder_name in decoder_list:
                     #train decoder
-                    model_decoder = DECODERS[decoder_name]()
+                    model_decoder = copy.deepcopy(DECODERS[decoder_name]())
                     model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
                     #make predictions
                     train_pred = model_decoder.predict(X_train[emb_idx])[:,0]
@@ -191,12 +191,17 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
         print("")            
     return R2s , predictions
 
+def compute_SNR(data_og,data_noise):
+    #https://arxiv.org/abs/1803.07252
+    norm = np.mean(np.linalg.norm(data_noise, axis=0, ord=2))
+    mse = np.mean(np.linalg.norm(data_noise-data_og, ord=2, axis=0)**2)
+    return 10*np.log10(norm/mse)
+
 
 @gu.check_inputs_for_pd
 def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = None, 
-                    noise_list = [0, 0.1, 0.2, 1, 2], trial_signal = None, 
+                    noise_list = [0, 0.1, 0.2, 1, 2], trial_signal = None, min_dist = 0.1,
                     decoder_list = ["wf", "wc", "xgb", "svr"], n_dims = 10, n_splits=10, verbose = False):  
-    
     """Train decoders on x-base signal (and on projected one if indicated) to 
     predict a 1D y-signal.
     
@@ -280,7 +285,7 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
 
     n_noise = len(noise_list)
     if verbose:
-        print("\t\tKfold: X/X",end='', sep='')
+        print("\tKfold: X/X",end='', sep='')
         pre_del = '\b\b\b'
     #initialize dictionary to save results
     R2s = dict()
@@ -294,12 +299,10 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
     for y_idx, y in enumerate(y_signal_list):
         for n_idx in range(n_noise):
             predictions[y_idx][:,n_idx,:,1] = np.tile(y, (1, n_splits)).T
-        
+
+    SNR_vals = np.zeros((n_splits,n_noise))*np.nan
     for kfold_idx in range(n_splits):
-        if verbose:
-            print(f"{pre_del}{kfold_idx+1}/{n_splits}", sep = '', end='')
-            pre_del = (len(str(kfold_idx+1))+len(str(n_splits))+1)*'\b'
-            
+        if verbose: print(f"{pre_del}{kfold_idx+1}/{n_splits}:")
         #add noise
         for noise_idx in range(n_noise):
             nx_base_signal = copy.deepcopy(x_base_signal)
@@ -307,6 +310,12 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
             l_signal = x_base_signal.shape[0]
             for ncell_idx in range(x_base_signal.shape[1]):
                 nx_base_signal[:, ncell_idx] += np.random.normal(0,sigma,l_signal)
+            if sigma>0:
+                SNR_vals[kfold_idx,noise_idx] = compute_SNR(x_base_signal, nx_base_signal)
+            else:
+                SNR_vals[kfold_idx,noise_idx] = np.inf
+                
+            if verbose: print(f"\t\tSNR={SNR_vals[kfold_idx,noise_idx]:.2f}")
             #split into train and test data
             if isinstance(trial_signal, np.ndarray):
                 train_index = np.any(trial_signal.reshape(-1,1)==trial_list[train_indexes[kfold_idx]], axis=1)
@@ -334,7 +343,7 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
                 if 'umap' in emb:
                     if isinstance(nn, type(None)):
                         nn = np.round(X_base_train.shape[0]*0.01).astype(int)
-                    model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=0.75)
+                    model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=min_dist)
                 elif 'iso' in emb:
                     if isinstance(nn, type(None)):
                         nn = np.round(X_base_train.shape[0]*0.01).astype(int)
@@ -350,7 +359,7 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
                 for y_idx in range(len(y_signal_list)):
                     for decoder_name in decoder_list:
                         #train decoder
-                        model_decoder = DECODERS[decoder_name]()
+                        model_decoder = copy.deepcopy(DECODERS[decoder_name]())
                         model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
                         #make predictions
                         train_pred = model_decoder.predict(X_train[emb_idx])[:,0]
@@ -368,7 +377,7 @@ def decoders_noise_1D(x_base_signal = None, y_signal_list=None, emb_list = [], n
                     
     if verbose:
         print("")            
-    return R2s , predictions
+    return R2s , predictions, SNR_vals
 
 
 def cross_session_decoders_LT(input_signal_A, input_signal_B, field_signal = None, field_signal_A = None, field_signal_B = None, 
@@ -593,7 +602,7 @@ def align_manifolds_1D(input_A, input_B, label_A, label_B, dir_A = None, dir_B =
             ncentLabel_B[2*c+1] = points_B_right.shape[0]
 
     del_cent_nan = np.all(np.isnan(centLabel_A), axis= 1)+ np.all(np.isnan(centLabel_B), axis= 1)
-    del_cent_num = (ncentLabel_A<100) + (ncentLabel_B<100)
+    del_cent_num = (ncentLabel_A<20) + (ncentLabel_B<20)
     del_cent = del_cent_nan + del_cent_num
     
     centLabel_A = np.delete(centLabel_A, del_cent, 0)
@@ -610,8 +619,8 @@ def get_point_registration(p1, p2, verbose=False):
         p1 = p1.transpose()
         p2 = p2.transpose()
     #Calculate centroids
-    p1_c = np.nanmean(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
-    p2_c = np.nanmean(p2, axis = 1).reshape((-1,1))
+    p1_c = np.nanmedian(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
+    p2_c = np.nanmedian(p2, axis = 1).reshape((-1,1))
     #Subtract centroids
     q1 = p1-p1_c
     q2 = p2-p2_c
@@ -678,8 +687,8 @@ def cross_session_decoders_LT_dict(dict_df_A, dict_df_B, x_base = "ML_rates", la
 
 
 def decoders_delay_1D(input_signal,field_signal = None, input_label=None, emb_list = ["umap"], input_trial = None,
-                       n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"], 
-                       time_shift = [-5, 5], verbose = False):  
+                       n_dims = 10, n_splits=10, decoder_list = ["wf", "wc", "xgb", "svr"], min_dist = 0.1,
+                       time_shift = [-5, 5], nn = 120, verbose = False):  
     '''Train decoders on base signal and/or embedded one.
     
     Parameters:
@@ -803,10 +812,9 @@ def decoders_delay_1D(input_signal,field_signal = None, input_label=None, emb_li
         #compute embeddings
         for emb in emb_list:
             if 'umap' in emb:
-                n_neighbours = np.round(X_base_train.shape[0]*0.01).astype(int)
-                model = umap.UMAP(n_neighbors = n_neighbours, n_components =n_dims, min_dist=0.75)
+                model = umap.UMAP(n_neighbors = nn, n_components =n_dims, min_dist=min_dist)
             elif 'iso' in emb:
-                model = Isomap(n_neighbors = 15,n_components = n_dims)
+                model = Isomap(n_neighbors = nn,n_components = n_dims)
             elif 'pca' in emb:
                 model = PCA(n_dims)
             X_signal_train = model.fit_transform(X_base_train)
@@ -823,8 +831,7 @@ def decoders_delay_1D(input_signal,field_signal = None, input_label=None, emb_li
                 keep_index[-shift_val:] *= np.nan
             elif shift_val<0: #past delay
                 keep_index[:-shift_val] *= np.nan
-                
-    
+                    
             keep_index_train = keep_index[train_index] >=0
             keep_index_test = keep_index[test_index] >= 0
             
@@ -836,7 +843,7 @@ def decoders_delay_1D(input_signal,field_signal = None, input_label=None, emb_li
             for emb_idx, emb in enumerate([field_signal, *emb_list]):
                 for y_idx in range(len(label_list)):
                     for decoder_name in decoder_list:
-                        model_decoder = DECODERS[decoder_name]()
+                        model_decoder = copy.deepcopy(DECODERS[decoder_name]())
                         model_decoder.fit(X_train_temp[emb_idx], Y_train[y_idx])
                         R2s[emb][decoder_name][shift_idx,kfold_index,y_idx,0] = median_absolute_error(Y_test[y_idx][:,0], 
                                                                                     model_decoder.predict(X_test_temp[emb_idx])[:,0])

@@ -1,7 +1,7 @@
-load Mouse-2026-20150303_095846-linear-track-TracesAndEvents.mat
+load Mouse-2021-20150301_151117-linear-track-TracesAndEvents.mat
 %See if frame detection artifacts (acceleration>2 cm/s2)  %CHANGE: artifacts must have a positive followed by a negative acceleration change take into account this shape for detection
 Fs = 20;
-
+tracesEvents.sF = Fs;
 %1:106 for 2019-20150238-130909
 %1:30 for 2019-20150301_104001
 %18300:end for 2021-20150228_180537
@@ -11,7 +11,7 @@ Fs = 20;
 %{
 field_names = fields(tracesEvents);
 for field_num= 1:numel(field_names)-1
-    tracesEvents.(field_names{field_num})(33836:end,:) = [];
+    tracesEvents.(field_names{field_num})(18300:end,:) = [];
     %tracesEvents.(field_names{field_num})(1:212,:) = [];
 end
 %}
@@ -206,7 +206,7 @@ cState_exp = [cState_exp, nan(size(cState_exp,1),1)];
 
 
 %%
-trial_idx = 1;
+trial_idx =1;
 %while trial_idx <=size(cState_exp,1)-1
 while trial_idx <=size(cState_exp,1)-1
 
@@ -261,7 +261,7 @@ while trial_idx <=size(cState_exp,1)-1
             if count == 0
                 if cState_exp(trial_idx-1,3) == -1
                     cState_exp(trial_idx,3) = -2;
-                elseif  trial_idx> 0
+                elseif  trial_idx> 2
                     if cState_exp(trial_idx-2,3) == -1 && cState_exp(trial_idx-1,3) == 0
                         cState_exp(trial_idx,3) = -2;
                         cState_exp(trial_idx-1,:) = [];
@@ -338,7 +338,7 @@ linkaxes([ax1,ax2],'x');
 clearvars -except tracesEvents cState_exp acc min_x max_x
 Fs = 20;
 for ii = 1:size(cState_exp,1)-1
-    trial_data(ii).mouse = 'Mouse2026';
+    trial_data(ii).mouse = 'Mouse2021';
     trial_data(ii).date = '2015';
     trial_data(ii).task = 'Linear-Track';
     trial_data(ii).trial_id = ii;
@@ -406,5 +406,5 @@ while count<=size(trial_data,2)
         count = count+1;
     end
 end
-save('M2026_20150301_185053_LT_PyalData_struct.mat', 'trial_data');
+save('M2021_20150301_151117_LT_PyalData_struct.mat', 'trial_data');
 

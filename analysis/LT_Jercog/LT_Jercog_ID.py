@@ -65,13 +65,12 @@ mice_list = ['M2019', 'M2021', 'M2023', 'M2024', 'M2025', 'M2026']
 
 params = {
     'signal_name': 'clean_traces',
-    'n_neigh': 60,
+    'n_neigh': 40,
     'verbose': True
 }
 
-base_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving'
-save_dir = os.path.join(base_dir, params['signal_name'], 'inner_dim')
-data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
+save_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/inner_dim'
+data_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/processed_data/'
 
 for mouse in mice_list:
     print('')
@@ -172,22 +171,21 @@ sns.barplot(ax=ax, x='Day', y='abids', data = pd_inner_dim, color =cpal[0])
 sns.lineplot(x = 'Day', y= 'abids', data = pd_inner_dim, units = 'mouse',
             ax = ax, estimator = None, color = ".5", markers = True)
 
-ax.axhline(y=4, color='k', linestyle= '--')
+ax.axhline(y=3, color='k', linestyle= '--')
 ax.set_ylabel('Inner dimension', size=12)
 ax.set_ylim([0,4.5])
 ax.set_xlabel('Day')
-#%%
 plt.tight_layout()
 plt.savefig(os.path.join(save_dir,'inner_dim.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
 plt.savefig(os.path.join(save_dir,'inner_dim.svg'), dpi = 400,bbox_inches="tight",transparent=True)
 
 
-# f = plt.figure()
-# ax = plt.subplot(1,1,1)
-# sns.scatterplot(ax=ax, x='num_cells', y='abids', hue = 'Day', data = pd_inner_dim, color =cpal[0])
-# r, p = sp.stats.spearmanr(pd_inner_dim['num_cells'], pd_inner_dim['abids'], nan_policy='omit')
-# plt.text(.05, .8, 'r={:.2f}'.format(r), transform=ax.transAxes)
-# plt.text(.05, .7, 'p={:.2f}'.format(p), transform=ax.transAxes)
-# plt.tight_layout()
-# plt.savefig(os.path.join(save_dir,'inner_dim_vs_num_cells.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
-# plt.savefig(os.path.join(save_dir,'inner_dim_vs_num_cells.svg'), dpi = 400,bbox_inches="tight",transparent=True)
+f = plt.figure()
+ax = plt.subplot(1,1,1)
+sns.scatterplot(ax=ax, x='num_cells', y='abids', hue = 'Day', data = pd_inner_dim, color =cpal[0])
+r, p = sp.stats.spearmanr(pd_inner_dim['num_cells'], pd_inner_dim['abids'], nan_policy='omit')
+plt.text(.05, .8, 'r={:.2f}'.format(r), transform=ax.transAxes)
+plt.text(.05, .7, 'p={:.2f}'.format(p), transform=ax.transAxes)
+plt.tight_layout()
+plt.savefig(os.path.join(save_dir,'inner_dim_vs_num_cells.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
+plt.savefig(os.path.join(save_dir,'inner_dim_vs_num_cells.svg'), dpi = 400,bbox_inches="tight",transparent=True)

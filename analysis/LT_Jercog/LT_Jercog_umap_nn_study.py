@@ -158,7 +158,7 @@ params = {
     'n_splits': 5
     }
 file_dir = '/media/julio/DATOS/spatial_navigation/Jercog_data/LT/results/moving/same_len_data/'
-label_names = ['posx']
+label_names = ['posx', 'dir_mat', 'posy', 'vel']
 
 for mouse in mice_list:
     f = open(os.path.join(save_dir,mouse + '_umap_nn_logFile.txt'), 'w')

@@ -410,8 +410,12 @@ def compute_umap_dim(base_signal=None, label_signal = None, trial_signal = None,
 				if verbose:
 					print(f"{pre_del}{sI_nn_idx+1}/{len(nn_list)}", sep = '', end = '')
 					pre_del = (len(str(sI_nn_idx+1))+len(str(len(nn_list)))+1)*'\b'
-				temp,_ , _, _ = compute_structure_index(emb_signal,label,n_neighbors=sI_nn, num_shuffles= 0,
+				try:
+					temp,_ , _, _ = compute_structure_index(emb_signal,label,n_neighbors=sI_nn, num_shuffles= 0,
 																	min_label=label_lim[0], max_label=label_lim[1])
+				except:
+					temp = np.nan
+					continue
 				sI_dim[dim,sI_nn_idx,label_idx] = temp
 			if verbose:
 				print(f" - Mean result: {np.nanmean(sI_dim[dim,:,label_idx]):.2f}")

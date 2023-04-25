@@ -19,38 +19,13 @@ from datetime import datetime
 import base64
 from io import BytesIO
 
+import scipy.signal as scs
+from scipy.ndimage import convolve1d
 from scipy import ndimage
 
+
 @gu.check_inputs_for_pd
-def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = None,**kwargs):
-    """
-    Parameters
-    ----------
-    pos_signal : TYPE, optional
-        DESCRIPTION. The default is None.
-    spikes_signal : TYPE, optional
-        DESCRIPTION. The default is None.
-    dim : TYPE, optional
-        DESCRIPTION. The default is 2.
-    save_dir : TYPE, optional
-        DESCRIPTION. The default is None.
-    **kwargs : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    place_cells : TYPE
-        DESCRIPTION.
-    metric_val : TYPE
-        DESCRIPTION.
-    th_metric_val : TYPE
-        DESCRIPTION.
-    pos_pdf : TYPE
-        DESCRIPTION.
-    neu_pdf : TYPE
-        DESCRIPTION.
-
-    """
+def get_place_cells(pos_signal=None, neu_signal=None, dim=2, save_dir=None,**kwargs):
     #pos_signal
     #rates_signal
     #spikes_signal
@@ -69,45 +44,30 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
     #num_shuffles
     #min_shift (s)
     
-    assert sum([arg in kwargs for arg in ['bin_width', 'bin_num']]) < 2,\
-                                                "only give bin_width or bin_num"
-
-    assert 'sF' in kwargs, "you must provide the sampling frequency ('sF')"
-    
     assert dim>0, "dim must be a positive integer"
 
-    assert pos_signal.shape[1]>= dim, f"pos_signal has less dimensions ({pos_signal.shape[1]}) " + \
-                                f"than the indicated in dim ({dim})"
+    assert pos_signal.shape[1]>= dim, f"pos_signal has less dimensions ({pos_signal.shape[1]})" +\
+                                        f" than the indicated in dim ({dim})"
     
-    #bin length for the 1-dimensional rate map in centimeters
-    if 'bin_num' not in kwargs and 'bin_width' not in kwargs:
-        kwargs["bin_width"] = 5 #cm
-        
-    #std to smooth position
-    if 'std_pos' not in kwargs:
-        kwargs['std_pos'] = 0.025 #s
+    assert kwargs['std_pos']>=0, "std to smooth position must be positive"
 
-    #ignore edges
-    if 'ignore_edges' not in kwargs:
-        kwargs['ignore_edges'] = 10 #%
+    assert sum([arg in kwargs for arg in ['bin_width', 'bin_num']]) < 2,\
+                                            "provide bin_width or bin_num but not both of them"
 
-    if 'std_pdf' not in kwargs:
-        kwargs['std_pdf'] = 2 #cm
+    assert 'sF' in kwargs, "you must provide the sampling frequency ('sF')"
 
-    if 'method' not in kwargs:
-        kwargs['method'] = 'spatial_info'
+    kwargs = _fill_missing_kwargs(kwargs)
 
-    if 'num_shuffles' not in kwargs:
-        kwargs['num_shuffles'] = 1000
-    
-    if 'min_shift' not in kwargs:
-        kwargs['min_shift'] = 5 
-    
-    if 'th_metric' not in kwargs:
-        kwargs['th_metric'] = 99
 
-    if 'mouse' not in kwargs:
-        kwargs['mouse'] = 'unknown'
+    neu_sig = copy.deepcopy(neu_signal)
+    #smooth pos signal if applicable
+    if kwargs['std_pos']>0:
+        pos = _smooth_data(pos_signal, std = kwargs['std_pos'], bin_size = 1/kwargs['sF'])
+    else:
+        pos = copy.deepcopy(pos_signal)
+    if pos.ndim == 1:
+        pos = pos.reshape(-1,1)
+
     #Compute velocity if not provided
     if 'vel_signal' not in kwargs:
         vel = np.linalg.norm(np.diff(pos_signal, axis= 0), axis=1)*kwargs['sF']
@@ -116,29 +76,9 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         vel = copy.deepcopy(kwargs['vel_signal'])
     vel = vel.reshape(-1)
 
-    #smooth pos signal if applicable
-    if kwargs['std_pos']>0:
-        assert kwargs['std_pos']>0, "std to smooth position must be positive"
-        assert kwargs['sF'] is not None, "to be able to smooth the position 'sF' (Hz) must be provided"
-        pos = gu.smooth_data(pos_signal, std = kwargs['std_pos'], bin_size = 1/kwargs['sF'], assymetry = False)
-    else:
-        pos = copy.deepcopy(pos_signal)
-    if pos.ndim == 1:
-        pos = pos.reshape(-1,1)
-
-    neu_sig = copy.deepcopy(spikes_signal)
-
-    #compute moving epochs
-    #TODO: consider minimum epoch duration and merging those with little time in between
-    if 'vel_th' not in kwargs:
-        kwargs['vel_th'] = 5 #cm/s
-    move_epochs = vel>=kwargs['vel_th'] 
-    #keep only moving epochs
-    pos = pos[move_epochs]
-    neu_sig = neu_sig[move_epochs]
-        
+    #Compute direction if not provided
     if 'direction_signal' in kwargs:
-        direction = kwargs["direction_signal"][move_epochs]
+        direction = kwargs["direction_signal"]
     else:
         direction = np.zeros((pos.shape[0],1))
     
@@ -148,9 +88,19 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         pos = pos[pos_boolean]
         neu_sig = neu_sig[pos_boolean]
         direction = direction[pos_boolean]
+        vel = vel[pos_boolean]
 
+    #compute moving epochs
+    move_epochs = vel>=kwargs['vel_th'] 
+    #keep only moving epochs
+    pos = pos[move_epochs]
+    neu_sig = neu_sig[move_epochs]
+    direction = direction[move_epochs]
+    vel = vel[move_epochs]
+        
     #Create grid along each dimensions
-    min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
+    min_pos = np.percentile(pos,1, axis=0) #(pos.shape[1],)
+    max_pos = np.percentile(pos,99, axis = 0) #(pos.shape[1],)
     obs_length = max_pos - min_pos #(pos.shape[1],)
     if kwargs['bin_width']:
         bin_width = kwargs['bin_width']
@@ -159,6 +109,7 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         else:
             bin_width = np.repeat(bin_width, dim, axis=0) #(pos.shape[1],)
         nbins = np.ceil(obs_length[:dim]/bin_width).astype(int) #(pos.shape[1],)
+        kwargs['nbins'] = nbins
     elif kwargs['bin_num']:
         nbins = kwargs['bin_num']
         if isinstance(nbins, list):
@@ -166,34 +117,37 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         else:
             nbins = np.repeat(nbins, dim, axis=0) #(pos.shape[1],)
         bin_width = np.round(obs_length[:dim]/nbins,4) #(pos.shape[1],)
-    
+        kwargs['bin_width'] = bin_width
     mapAxis = list()
     for d in range(dim):
-        mapAxis.append(np.arange(min_pos[d],max_pos[d], bin_width[d])); #(nbins[d],)
+        mapAxis.append(np.linspace(min_pos[d], max_pos[d], nbins[d]+1)[:-1].reshape(-1,1)); #(nbins[d],)
     
     #Compute probability density function
     pos_pdf, neu_pdf = _get_pdf(pos, neu_sig, mapAxis, dim, direction)
     
     #smooth pdfs
     for d in range(dim):
-        pos_pdf = gu.smooth_data(pos_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d],axis = d, assymetry = False)
-        neu_pdf = gu.smooth_data(neu_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d], axis = d, assymetry = False)
+        pos_pdf = _smooth_data(pos_pdf, std=kwargs['std_pdf'], bin_size=bin_width[d], axis=d)
+        neu_pdf = _smooth_data(neu_pdf, std=kwargs['std_pdf'], bin_size=bin_width[d], axis=d)
     
     #compute metric
     metric_val = _compute_metric(pos_pdf, neu_pdf, kwargs["method"])
-    
-    space_dims = tuple(range(neu_pdf.ndim - 2)) #idx of axis related to space
-    subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
 
     #check which cells do not have a minimum activity
     val_dirs = np.array(np.unique(direction))
     num_dirs = len(val_dirs)
-
     total_firing_neurons = np.zeros((neu_sig.shape[1], num_dirs))
-    for dr in range(num_dirs):
-        total_firing_neurons[:,dr] = np.sum(neu_sig[direction[:,0]==val_dirs[dr],:]>0, axis=0)
-    low_firing_neurons = total_firing_neurons<10
+    if len(np.unique(neu_sig))==2:
+        for dr in range(num_dirs):
+            total_firing_neurons[:,dr] = np.sum(neu_sig[direction[:,0]==val_dirs[dr],:]>0., axis=0)
+    else:
+        if 'fluo_th' not in kwargs:
+            kwargs['fluo_th'] = 0.1
+        for dr in range(num_dirs):
+            total_firing_neurons[:,dr] = (np.sum(np.diff(neu_sig[direction[:,0]==val_dirs[dr],:]\
+                                            >kwargs['fluo_th'], axis=0)>0, axis= 0)/2).astype(int)
 
+    low_firing_neurons = total_firing_neurons<3
     #do shuffling
     shuffled_metric_val = np.zeros((kwargs["num_shuffles"], metric_val.shape[0], metric_val.shape[1]))
     min_shift = np.ceil(kwargs['min_shift']*kwargs['sF'])
@@ -204,16 +158,14 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         shifted_pos = np.zeros(pos.shape)
         shifted_pos[:-shift,:] = copy.deepcopy(pos[shift:,:])
         shifted_pos[-shift:,:] = copy.deepcopy(pos[:shift,:])
-        
+
         shifted_direction = np.zeros(direction.shape)
         shifted_direction[:-shift,:] = copy.deepcopy(direction[shift:,:])
         shifted_direction[-shift:,:] = copy.deepcopy(direction[:shift,:])
-        
         shifted_pos_pdf, shifted_neu_pdf = _get_pdf(shifted_pos, neu_sig, mapAxis, dim, shifted_direction)
         for d in range(dim):
-            shifted_pos_pdf = gu.smooth_data(shifted_pos_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d], axis = d, assymetry = False)
-            shifted_neu_pdf = gu.smooth_data(shifted_neu_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d], axis = d, assymetry = False)
-        
+            shifted_pos_pdf = _smooth_data(shifted_pos_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d], axis = d)
+            shifted_neu_pdf = _smooth_data(shifted_neu_pdf, std = kwargs['std_pdf'], bin_size = bin_width[d], axis = d)
         shuffled_metric_val[idx] = _compute_metric(shifted_pos_pdf, shifted_neu_pdf, kwargs["method"])
         
     th_metric_val = np.percentile(shuffled_metric_val, kwargs['th_metric'], axis=0)
@@ -221,7 +173,6 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
     place_cells_idx = np.linspace(0, metric_val.shape[0]-1, metric_val.shape[0])
     place_cells_idx = place_cells_idx[np.any((~low_firing_neurons)*metric_val>th_metric_val,axis=1)].astype(int)
     place_cells_dir = (metric_val*~low_firing_neurons>th_metric_val).astype(int)
-
 
     if dim==1:
         _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cells_idx, 
@@ -244,11 +195,37 @@ def get_place_cells(pos_signal = None, spikes_signal = None, dim = 2,save_dir = 
         "pos_pdf": pos_pdf,
         "neu_pdf": neu_pdf,
         "mapAxis": mapAxis,
+        'neu_sig': neu_sig,
+        'pos_sig': pos,
+        'vel_sig': vel,
+        'dir_sig': direction,
         "params": kwargs
     }
 
     return output_dict
 
+def _fill_missing_kwargs(kwargs):
+    if 'bin_num' not in kwargs and 'bin_width' not in kwargs:
+        kwargs["bin_width"] = 2.5 #cm
+    if 'std_pos' not in kwargs:
+        kwargs['std_pos'] = 0.025 #s
+    if 'ignore_edges' not in kwargs:
+        kwargs['ignore_edges'] = 5 #%
+    if 'std_pdf' not in kwargs:
+        kwargs['std_pdf'] = 5 #cm
+    if 'method' not in kwargs:
+        kwargs['method'] = 'spatial_info'
+    if 'num_shuffles' not in kwargs:
+        kwargs['num_shuffles'] = 1000
+    if 'min_shift' not in kwargs:
+        kwargs['min_shift'] = 5  #s
+    if 'th_metric' not in kwargs:
+        kwargs['th_metric'] = 99 #percentile
+    if 'mouse' not in kwargs:
+        kwargs['mouse'] = 'unknown'
+    if 'vel_th' not in kwargs:
+        kwargs['vel_th'] = 5 #cm/s
+    return kwargs
 
 def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes, method, save_dir):
     ###########################################################################
@@ -325,7 +302,6 @@ def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
     with open(os.path.join(save_dir, f"PlaceCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
 
-   
 def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cells, place_cells_dir, method, save_dir, mouse):
     min_pos, max_pos = [np.min(pos,axis=0), np.max(pos,axis = 0)] #(pos.shape[1],)
     cells_per_row = 4
@@ -376,8 +352,8 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cel
             title.append(f"Cell: {gcell_idx} -")
             [title.append(f"{midx}: {mval:.2f} ") for midx, mval in enumerate(metric_val[gcell_idx]) 
                                                              if place_cells_dir[gcell_idx, midx]==1];
+
             ax.set_title(' '.join(title), color = color_cell)
-            
             ax  = plt.subplot2grid((cells_per_row*6, cells_per_col), (row_idx*6+2, col_idx), rowspan=2)
             p = ax.matshow(neu_pdf[:,gcell_idx].T, aspect = 'auto')
             ax.set_yticks([])
@@ -532,7 +508,6 @@ def _check_placefields(pos_pdf, neu_pdf, place_cells = None):
             
     return place_fields, place_fields_id
 
-
 def get_distance_to_object(mat):
     #Adapted from https://www.geeksforgeeks.org/distance-nearest-cell-1-binary-matrix/
     #TODO: generalize to N dimensions
@@ -560,7 +535,6 @@ def get_distance_to_object(mat):
         D = D[:,0]
                        
     return D
-
 
 def _compute_response_profile(pos_pdf, neu_pdf):
     """Compute response profile adapted from
@@ -618,7 +592,6 @@ def _compute_response_profile(pos_pdf, neu_pdf):
     max_response = np.nanmax(neu_pdf, axis=space_dims)
     return max_response
     
-
 def _compute_spatial_info(pos_pdf, neu_pdf):
     """Compute spatial information adapted from
     https://doi.org/10.1038/s41467-019-10139-7
@@ -680,7 +653,6 @@ def _compute_spatial_info(pos_pdf, neu_pdf):
     return np.nansum(np.multiply(tile_pos_pdf, np.multiply(norm_neu_pdf, 
                   np.log2(norm_neu_pdf))), axis=tuple(range(neu_pdf.ndim - 2)))
 
-
 def _get_edges(pos, limit, dim):
     """Obtain which points of 'pos' are inside the limits of the border defined
     by limit (%).
@@ -722,7 +694,6 @@ def _get_edges(pos, limit, dim):
     points_inside_lim = ~np.any(points_inside_lim ,axis=1)
     
     return points_inside_lim
-
 
 def _get_pdf(pos, neu_signal, mapAxis, dim, dir_mat = None):
     """Obtain probability density function of 'pos' along each bin defined by 
@@ -797,7 +768,74 @@ def _get_pdf(pos, neu_signal, mapAxis, dim, dir_mat = None):
         pos_pdf[pos_idxs] += 1
         neu_pdf[neu_idxs] += (1/pos_pdf[pos_idxs])* \
                                    (neu_signal[sample,:]-neu_pdf[neu_idxs]) #online average
-                                   
+    
+
+
     pos_pdf = pos_pdf/np.sum(pos_pdf,axis=tuple(range(pos_pdf.ndim - 1))) #normalize probability density function
     
     return pos_pdf, neu_pdf
+
+#Adapted from PyalData package (19/10/21) (added variable win_length)
+def _norm_gauss_window(bin_size, std, num_std = 5):
+    """
+    Gaussian window with its mass normalized to 1
+
+    Parameters
+    ----------
+    bin_size (float): binning size of the array we want to smooth in same time 
+                units as the std
+    
+    std (float): standard deviation of the window use hw_to_std to calculate 
+                std based from half-width (same time units as bin_size)
+                
+    num_std (int): size of the window to convolve in #of stds
+
+    Returns
+    -------
+    win (1D np.array): Gaussian kernel with length: num_bins*std/bin_length
+                mass normalized to 1
+    """
+    win_len = int(num_std*std/bin_size)
+    if win_len%2==0:
+        win_len = win_len+1
+    win = scs.gaussian(win_len, std/bin_size)      
+    return win / np.sum(win)
+
+#Copied from PyalData package (19/10/21)
+def _hw_to_std(hw):
+    """
+    Convert half-width to standard deviation for a Gaussian window.
+    """
+    return hw / (2 * np.sqrt(2 * np.log(2)))
+
+#Copied from PyalData package (19/10/21)
+def _smooth_data(mat, bin_size=None, std=None, hw=None, win=None, axis=0):
+    """
+    Smooth a 1D array or every column of a 2D array
+
+    Parameters
+    ----------
+    mat : 1D or 2D np.array
+        vector or matrix whose columns to smooth
+        e.g. recorded spikes in a time x neuron array
+    bin_size : float
+        length of the timesteps in seconds
+    std : float (optional)
+        standard deviation of the smoothing window
+    hw : float (optional)
+        half-width of the smoothing window
+    win : 1D array-like (optional)
+        smoothing window to convolve with
+
+    Returns
+    -------
+    np.array of the same size as mat
+    """
+    #assert mat.ndim == 1 or mat.ndim == 2, "mat has to be a 1D or 2D array"
+    assert  sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw, or std"
+    if win is None:
+        assert bin_size is not None, "specify bin_size if not supplying window"
+        if std is None:
+            std = _hw_to_std(hw)
+        win = _norm_gauss_window(bin_size, std)
+    return convolve1d(mat, win, axis=axis, output=np.float32, mode='reflect')
