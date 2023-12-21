@@ -303,8 +303,12 @@ class windowClassifyPC:
         ax.set_title(' | '.join(title), color = color_cell, fontsize = 8)
 
     def plot_heatmap(self, ax, pc_struct,num, currCell, idx, maxVal):
-        if not self.cbars[idx][num] == 0:
-            self.cbars[idx][num].remove()
+        try:
+            print(cbars[idx][num])
+            if not self.cbars[idx][num] == 0:
+                self.cbars[idx][num].remove()
+        except:
+            a = 0
         neu_pdf = pc_struct['neu_pdf']
         p = ax.matshow(neu_pdf[:,currCell].T, vmin = 0, vmax = maxVal, aspect = 'auto')
         ax.set_yticks([])
@@ -362,24 +366,30 @@ class windowClassifyPC:
 #|________________________________________________________________________|#
 
 mice_list = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-data_dir = '/media/julio/DATOS/spatial_navigation/paper/Fig3/place_cells'
-
+dataDir = '/home/julio/Documents/SP_project/LT_DeepSup/place_cells/'
+saveDir = '/home/julio/Documents/SP_project/LT_DeepSup/functional_cells/'
 for mouse in mice_list:
     print(f'Working on mouse: {mouse}')
     file_name =  mouse+'_pc_dict.pkl'
-    file_path = os.path.join(data_dir, mouse)
 
-    animal_pc = load_pickle(file_path, file_name)
+    animal_pc = load_pickle(dataDir, file_name)
     fnames = list(animal_pc.keys())
+    fnamePre = [fname for fname in fnames if 'lt' in fname][0]
+    fnameRot = [fname for fname in fnames if 'rot' in fname][0]
+    savePath = os.path.join(saveDir,mouse)
+    try:
+        os.mkdir(savePath)
+    except:
+        pass
 
     window=Tk()
-    myWin = windowClassifyPC(window, animal_pc[fnames[0]], animal_pc[fnames[1]], animalName = mouse, saveDir=file_path)
+    myWin = windowClassifyPC(window, animal_pc[fnamePre], animal_pc[fnameRot], animalName = mouse, saveDir=savePath)
     window.title(f'Place Cell Classification for {mouse}')
     window.geometry("1500x800+10+20")
     window.mainloop()
 
 
-
+#######################################################################
 
 deep_mice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4']
 sup_mice = ['ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']

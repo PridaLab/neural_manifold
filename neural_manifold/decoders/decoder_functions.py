@@ -119,9 +119,10 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
             R2s[emb][decoder_name] = np.zeros((n_splits,len(y_signal_list),2))
             
     n_x_signals = len(['base_signal', *emb_list])
-    predictions = [np.zeros((n_splits,y.shape[0],n_x_signals+2)) for y in y_signal_list]
+    predictions = [[np.zeros((n_splits,y.shape[0],n_x_signals+2)) for x in decoder_list] for y in y_signal_list]
     for y_idx, y in enumerate(y_signal_list):
-        predictions[y_idx][:,:,1] = np.tile(y, (1, n_splits)).T
+        for x_idx in range(len(decoder_list)):
+            predictions[y_idx][x_idx][:,:,1] = np.tile(y, (1, n_splits)).T
         
     for kfold_idx in range(n_splits):
         if verbose:
@@ -139,8 +140,9 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
             test_index = test_indexes[kfold_idx]
             
         for y_idx, y in enumerate(y_signal_list):
-            predictions[y_idx][kfold_idx,train_index,0] = 0
-            predictions[y_idx][kfold_idx,test_index,0] = 1
+            for dec_idx in range(len(decoder_list)):
+                predictions[y_idx][dec_idx][kfold_idx,train_index,0] = 0
+                predictions[y_idx][dec_idx][kfold_idx,test_index,0] = 1
 
         X_train = []
         X_base_train = x_base_signal[train_index,:]
@@ -169,7 +171,7 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
         #train and test decoders 
         for emb_idx, emb in enumerate(['base_signal', *emb_list]):
             for y_idx in range(len(y_signal_list)):
-                for decoder_name in decoder_list:
+                for dec_idx, decoder_name in enumerate(decoder_list):
                     #train decoder
                     model_decoder = copy.deepcopy(DECODERS[decoder_name]())
                     model_decoder.fit(X_train[emb_idx], Y_train[y_idx])
@@ -185,7 +187,7 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
 
                     total_pred = np.hstack((train_pred, test_pred)).T
                     total_pred = total_pred[np.argsort(np.hstack((train_index, test_index)).T)]
-                    predictions[y_idx][kfold_idx,:,emb_idx+2] = total_pred
+                    predictions[y_idx][dec_idx][kfold_idx,:,emb_idx+2] = total_pred
                     
     if verbose:
         print("")            

@@ -1,4 +1,4 @@
-load('CalbCharly1_ltm_events_s3.mat')
+load('ChCh2_veh_ltm_events_s3.mat')
 
 
 tracesEvents_og = tracesEvents;
@@ -6,8 +6,8 @@ fields = fieldnames(tracesEvents_og);
 l = size(tracesEvents_og.raw_traces,1);
 
 c1_s = 1;
-c1_e = 25038;
-c2_s = 25039;
+c1_e = 20464;
+c2_s = c1_e+1;
 c2_e = l;
 
 tracesEvents = tracesEvents_og;
@@ -18,15 +18,15 @@ for ii = 1:length(fields)
         tracesEvents.(fields{ii}) = tracesEvents_og.(fields{ii})(c1_s: c1_e,:);
     end
 end
-save('CalbCharly1_lt_events_s2.mat', 'tracesEvents');
+save('ChCh2_veh_lt_events_s2.mat', 'tracesEvents');
 
 tracesEvents = tracesEvents_og;
 tracesEvents.test = 'rot';
 tracesEvents.session = 4;
 for ii = 1:length(fields)
     if size(tracesEvents_og.(fields{ii}),1) == l
-        tracesEvents.(fields{ii})(c2_e:end,:) = [];
+        % tracesEvents.(fields{ii})(c2_e:end,:) = [];
         tracesEvents.(fields{ii})(1:c2_s,:) = [];
     end
 end
-save('CalbCharly1_rot_events_s4.mat', 'tracesEvents');
+save('ChCh2_veh_rot_events_s4.mat', 'tracesEvents');

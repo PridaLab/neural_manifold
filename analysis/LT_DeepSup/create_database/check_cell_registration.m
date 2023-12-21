@@ -1,6 +1,6 @@
-mouse = 'CZ4';
-ltm = load([mouse,'_lt_events_s5.mat']);
-rot = load([mouse, '_rot_events_s7.mat']);
+mouse = 'GC2';
+ltm = load([mouse,'_ltpre_events_s3.mat']);
+rot = load([mouse, '_ltpost_events_s5.mat']);
 
 figure
 select = nan(1,size(ltm.tracesEvents.denoised_traces,2));
@@ -19,7 +19,7 @@ cells = 1:size(ltm.tracesEvents.denoised_traces,2);
 cells_selected = cells(select==1);
 save('cells_select.mat', 'cells_selected')
 
-load([mouse, '_lt_s5_PyalData_struct.mat'])
+load([mouse, '_ltpre_s3_PyalData_struct.mat'])
 for count=1:size(trial_data,2)
     trial_data(count).raw_traces = trial_data(count).raw_traces(:,cells_selected);
     trial_data(count).denoised_traces = trial_data(count).denoised_traces(:,cells_selected);
@@ -33,9 +33,9 @@ for count=1:size(trial_data,2)
         eval(strcat('trial_data(count).',event_fields{idx},' = trial_data(count).', event_fields{idx}, '(:,cells_selected);'))
     end
 end
-save([mouse, '_lt_s5_PyalData_struct.mat'], "trial_data")
+save([mouse, '_ltpre_s3_PyalData_struct.mat'], "trial_data")
 
-load([mouse, '_rot_s7_PyalData_struct.mat'])
+load([mouse, '_ltpost_s5_PyalData_struct.mat'])
 for count=1:size(trial_data,2)
     trial_data(count).raw_traces = trial_data(count).raw_traces(:,cells_selected);
     trial_data(count).denoised_traces = trial_data(count).denoised_traces(:,cells_selected);
@@ -49,4 +49,4 @@ for count=1:size(trial_data,2)
         eval(strcat('trial_data(count).',event_fields{idx},' = trial_data(count).', event_fields{idx}, '(:,cells_selected);'))
     end
 end
-save([mouse, '_rot_s7_PyalData_struct.mat'], "trial_data")
+save([mouse, '_ltpost_s5_PyalData_struct.mat'], "trial_data")

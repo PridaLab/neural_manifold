@@ -510,7 +510,7 @@ def compute_umap_sI_dim(base_signal = None, label_signal = None, n_neigh= 0.01, 
 
 
 @gu.check_inputs_for_pd
-def compute_abids(base_signal = None, n_neigh= 50):
+def compute_abids(base_signal = None, n_neigh= 50, verbose = True):
     '''Compute dimensionality of data array according to Structure Index in UMAP
     
     Parameters:
@@ -539,10 +539,13 @@ def compute_abids(base_signal = None, n_neigh= 50):
         return k**2 / np.sum(np.square(para_coss))
 
     search_struct = cKDTree(base_signal)
-    return np.array([
-        abid(base_signal,n_neigh,x,search_struct)
-        for x in tqdm(base_signal,desc="abids",leave=False)
-    ])
+    if verbose:
+        return np.array([
+            abid(base_signal,n_neigh,x,search_struct)
+            for x in tqdm(base_signal,desc="abids",leave=False)
+        ])
+    else:
+        return np.array([abid(base_signal,n_neigh,x,search_struct) for x in base_signal])
 
 
 

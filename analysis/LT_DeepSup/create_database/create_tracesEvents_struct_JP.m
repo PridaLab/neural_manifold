@@ -28,7 +28,6 @@ function create_tracesEvents_struct_JP(mouse_name, varargin)
     %folder
     if sum(contains(session_names, 'lt','IgnoreCase',true))*...
             sum(contains(session_names, 'rot','IgnoreCase',true)) == 1
-
         session_type = 'LT_ROT';
         double_fprintf(fileID,'LT to Rotation pipeline selected.\n')
     elseif sum(contains(session_names, 'LT','IgnoreCase',true))*...

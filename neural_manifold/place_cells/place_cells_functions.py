@@ -102,7 +102,7 @@ def get_place_cells(pos_signal=None, neu_signal=None, dim=2, save_dir=None,**kwa
     min_pos = np.percentile(pos,1, axis=0) #(pos.shape[1],)
     max_pos = np.percentile(pos,99, axis = 0) #(pos.shape[1],)
     obs_length = max_pos - min_pos #(pos.shape[1],)
-    if kwargs['bin_width']:
+    if 'bin_width' in kwargs:
         bin_width = kwargs['bin_width']
         if isinstance(bin_width, list):
             bin_width = np.array(bin_width)
@@ -110,7 +110,7 @@ def get_place_cells(pos_signal=None, neu_signal=None, dim=2, save_dir=None,**kwa
             bin_width = np.repeat(bin_width, dim, axis=0) #(pos.shape[1],)
         nbins = np.ceil(obs_length[:dim]/bin_width).astype(int) #(pos.shape[1],)
         kwargs['nbins'] = nbins
-    elif kwargs['bin_num']:
+    elif 'bin_num' in kwargs:
         nbins = kwargs['bin_num']
         if isinstance(nbins, list):
             nbins = np.array(nbins)
@@ -179,14 +179,14 @@ def get_place_cells(pos_signal=None, neu_signal=None, dim=2, save_dir=None,**kwa
                                         place_cells_dir, kwargs["method"], save_dir, kwargs["mouse"])
     elif dim==2:
         _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells_idx, 
-                                     spikes, kwargs["method"], save_dir)
+                                    kwargs["method"], save_dir)
     
-    place_fields, place_fields_id = _check_placefields(pos_pdf, neu_pdf, place_cells_idx)
+    # place_fields, place_fields_id = _check_placefields(pos_pdf, neu_pdf, place_cells_idx)
     
     output_dict = {
         "place_cells_idx": place_cells_idx,
         "place_cells_dir": place_cells_dir,
-        "place_fields": place_fields,
+        # "place_fields": place_fields,
         "metric_val": metric_val,
         "shuffled_metric_val": shuffled_metric_val,
         "th_metric_val": th_metric_val,
@@ -227,7 +227,7 @@ def _fill_missing_kwargs(kwargs):
         kwargs['vel_th'] = 5 #cm/s
     return kwargs
 
-def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes, method, save_dir):
+def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, method, save_dir):
     ###########################################################################
     
     
@@ -267,17 +267,16 @@ def _plot_place_cells_2D(pos, neu_sig, neu_pdf, metric_val, place_cells, spikes,
                    (row_idx*6, col_idx*num_dir), rowspan=2, colspan = num_dir)
             
             ax.plot(pos[:,0], pos[:,1], color = [.5,.5,.5], alpha = 0.3)
-            if isinstance(spikes, type(None)):
-                th = np.nanstd(neu_sig[:,gcell_idx])
-                active_ts = neu_sig[:,gcell_idx] > 2*th
-                t_neu_sig = neu_sig[active_ts, gcell_idx]
-                t_pos = pos[active_ts,:]
-                signal_inds = t_neu_sig.argsort()
-                sorted_pos = t_pos[signal_inds,:]
-                sorted_neu_sig = t_neu_sig[signal_inds]
-                ax.scatter(*sorted_pos[:,:2].T, c = sorted_neu_sig, s= 8)
-            else:
-                ax.scatter(*pos[spikes[:,gcell_idx]>0,:2].T, color = color_cell, s= 5)
+
+            th = np.nanstd(neu_sig[:,gcell_idx])
+            active_ts = neu_sig[:,gcell_idx] > 2*th
+            t_neu_sig = neu_sig[active_ts, gcell_idx]
+            t_pos = pos[active_ts,:]
+            signal_inds = t_neu_sig.argsort()
+            sorted_pos = t_pos[signal_inds,:]
+            sorted_neu_sig = t_neu_sig[signal_inds]
+            ax.scatter(*sorted_pos[:,:2].T, c = sorted_neu_sig, s= 8)
+
             ax.set_xlim([min_pos[0], max_pos[0]])
             ax.set_ylim([min_pos[1], max_pos[1]])
             title = list()
@@ -367,7 +366,7 @@ def _plot_place_cells_1D(pos, neu_sig, neu_pdf, metric_val, direction, place_cel
         html = html + '<br>\n' + '<img src=\'data:image/png;base64,{}\'>'.format(encoded) + '<br>\n'
         plt.close(fig)
     #Save html file
-    with open(os.path.join(save_dir, f"{mouse}_placeCells_{method}__{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
+    with open(os.path.join(save_dir, f"{mouse}_placeCells_{method}_{datetime.now().strftime('%d%m%y_%H%M%S')}.html"),'w') as f:
         f.write(html)
 
 def _compute_metric(pos_pdf, neu_pdf, method):
@@ -375,6 +374,8 @@ def _compute_metric(pos_pdf, neu_pdf, method):
         return _compute_spatial_info(pos_pdf, neu_pdf)
     elif 'response_profile' in method:
         return _compute_response_profile(pos_pdf, neu_pdf)
+    elif 'moransI' in method:
+        return _compute_morans_i(pos_pdf, neu_pdf)
 
 def _check_placefields(pos_pdf, neu_pdf, place_cells = None):
     """Compute place fields of already detected place cells. Adapted from:
@@ -536,6 +537,32 @@ def get_distance_to_object(mat):
                        
     return D
 
+def _compute_morans_i(pos_pdf, neu_pdf):
+    #include pos_pdf for consistency although not needed)
+    num_bins = pos_pdf.shape[0]
+
+    w_sigma = 10  # cm
+    w_sigma = w_sigma / 5
+    indices = np.arange(num_bins)
+    distances = indices[:, None] - indices[None, :]
+    weights = np.exp(-distances**2 / (2 * w_sigma**2))
+    np.fill_diagonal(weights, 0)
+
+    space_dims = tuple(range(neu_pdf.ndim - 2)) #idx of axis related to space
+    subAxis_length =  [neu_pdf.shape[d] for d in range(neu_pdf.ndim-2)] #number of bins on each space dim
+    m_neu_pdf = np.mean(neu_pdf, axis= space_dims) #mean neuronal activity for each neuron and each direction along all space
+    neu_pdf_centered = neu_pdf - m_neu_pdf
+
+    morans_i = np.zeros((neu_pdf.shape[-2],neu_pdf.shape[-1]))*np.nan
+    for cell in range(neu_pdf.shape[-2]):
+        r_centered = neu_pdf_centered[:,cell,0].reshape(-1,)
+        morans_i[cell,0] = np.sum(weights * (r_centered[:, None] * r_centered[None, :])) / np.sum(weights) / np.sum(r_centered**2) * num_bins
+
+        r_centered = neu_pdf_centered[:,cell,1]
+        morans_i[cell,1] = np.sum(weights * (r_centered[:, None] * r_centered[None, :])) / np.sum(weights) / np.sum(r_centered**2) * num_bins
+
+    return morans_i
+
 def _compute_response_profile(pos_pdf, neu_pdf):
     """Compute response profile adapted from
     https://doi.org/10.1016/j.cub.2020.07.006
@@ -665,7 +692,7 @@ def _get_edges(pos, limit, dim):
     limit: numerical (%)
         Limit (%) used to decided which points are kepts and which ones are 
         discarded. (i.e. if limit=10 and pos=[0,100], only the points inside the
-                    range [10,90] will be kepts).
+                    range [10,90] will be kept).
     
     dim: integer
         Dimensionality of the division.    
