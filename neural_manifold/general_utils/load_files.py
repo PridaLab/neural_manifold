@@ -58,7 +58,6 @@ def load_files(data_dir, pattern, struct_type = "PyalData", verbose=False):
     return data_dict
 
 
-
 def mat2dataframe(path, shift_idx_fields, td_name=None):
     """
     Load a trial_data .mat file and turn it into a pandas DataFrame

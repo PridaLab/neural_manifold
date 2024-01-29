@@ -1,6 +1,6 @@
 close all; clear ; clc;
 %%
-data_file =  'DD2_C21_rot_events_s4.mat';
+data_file =  'ChZ12_lt_events_s2.mat';
 %% Load struct
 load(data_file);
 %% Get start and end points of reward boxes
@@ -43,8 +43,8 @@ if sum(contains(fieldnames(tracesEvents), 'ceroxy', 'IgnoreCase',true))==0
     tracesEvents.position(:,1) = tracesEvents.position(:,1) -tracesEvents.ceroXY(1);
     tracesEvents.position(:,2) = tracesEvents.position(:,2) -tracesEvents.ceroXY(2);
 end
-leftLim = 4;
-rightLim = 60;
+leftLim = 6;
+rightLim = 62;
 %{
 leftLim = mean(leftLim.Position(:,1));
 rightLim = mean(rightLim.Position(:,1));
