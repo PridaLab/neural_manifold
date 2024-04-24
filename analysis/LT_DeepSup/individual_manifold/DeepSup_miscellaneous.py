@@ -1,26 +1,681 @@
-import sys, os, copy, pickle, timeit, random
+
+
+
+
+
+
+rawsignalPre = 
+rawsignalPre = copy.deepcopy(np.concatenate(animalPre['raw_traces'].values, axis=0))
+rawsignalRot = copy.deepcopy(np.concatenate(animalRot['raw_traces'].values, axis=0))
+rawBoth = np.concatenate((rawsignalPre, rawsignalRot), axis=0)
+degree = np.max(rawBoth, axis=0)
+
+actOrder = np.argsort(degree)
+
+plt.figure(); plt.plot(degree[actOrder])
+
+
+signalPre = copy.deepcopy(np.concatenate(animalPre['clean_traces'].values, axis=0))[:, actOrder[-80:]]
+posPre = copy.deepcopy(np.concatenate(animalPre['pos'].values, axis=0))
+signalRot = copy.deepcopy(np.concatenate(animalRot['clean_traces'].values, axis=0))[:, actOrder[-80:]]
+posRot = copy.deepcopy(np.concatenate(animalRot['pos'].values, axis=0))
+#%%all data
+index = np.vstack((np.zeros((signalPre.shape[0],1)),np.zeros((signalRot.shape[0],1))+1))
+concat_signal = np.vstack((signalPre, signalRot))
+model = umap.UMAP(n_neighbors =nNeigh, n_components =dim, min_dist=0.1)
+# model = umap.UMAP(n_neighbors = 600, n_components =4, min_dist=0.5)
+model.fit(concat_signal)
+concat_emb = model.transform(concat_signal)
+embPre = concat_emb[index[:,0]==0,:]
+embRot = concat_emb[index[:,0]==1,:]
+
+
+
+
+fig = plt.figure()
+ax = plt.subplot(1,3,1, projection = '3d')
+ax.scatter(*embPre[:,:3].T, color ='b', s= 30, cmap = 'magma')
+ax.scatter(*embRot[:,:3].T, color = 'r', s= 30, cmap = 'magma')
+ax.set_title('All')
+ax = plt.subplot(1,3,2, projection = '3d')
+ax.scatter(*embPre[:,:3].T, c = posPre[:,0], s= 30, cmap = 'magma')
+ax.scatter(*embRot[:,:3].T, c = posRot[:,0], s= 30, cmap = 'magma')
+ax = plt.subplot(1,3,3, projection = '3d')
+ax.scatter(*centPre[:,:3].T, color ='b', s= 30, cmap = 'magma')
+ax.scatter(*centRot[:,:3].T, color = 'r', s= 30, cmap = 'magma')
+
+plt.suptitle(f"{mouse}")
+
+
+
+
+miceList = ['M2019','M2023', 'M2024', 'M2025', 'M2026']
+saveDir = '/home/julio/Documents/SP_project/Fig1/SI/'
+dataDir = '/home/julio/Documents/SP_project/Fig1/processed_data/'
+
+sI_dict = load_pickle(saveDir, 'sI_clean_dict.pkl')
+for mouse in miceList:
+    print(f"\nWorking on mouse {mouse}: ")
+    fileName =  mouse+'_df_dict.pkl'
+    filePath = os.path.join(dataDir, mouse)
+    pdMouse = load_pickle(filePath,fileName)
+    #keep only right left trials
+    pdMouse = gu.select_trials(pdMouse,"dir == ['N','L','R']")
+    #get data
+    pos = copy.deepcopy(np.concatenate(pdMouse['pos'].values, axis=0))
+    dir_mat = copy.deepcopy(np.concatenate(pdMouse['dir_mat'].values, axis=0))
+    vel = copy.deepcopy(np.concatenate(pdMouse['vel'].values, axis=0))
+    vectorial_feature = np.concatenate((pos[:,0].reshape(-1,1),dir_mat),axis=1)
+    time = np.arange(pos.shape[0])
+
+    for signalName in ['clean_traces', 'umap', 'isomap', 'pca']:
+        print(f'\t{signalName}: ')
+        signal = copy.deepcopy(np.concatenate(pdMouse[signalName].values, axis=0))
+        if signalName == 'pca' or signalName =='isomap':
+            signal = signal[:,:3]
+        D = pairwise_distances(signal)
+        noiseIdx = filter_noisy_outliers(signal,D=D)
+        csignal = signal[~noiseIdx,:]
+        cpos = pos[~noiseIdx,:]
+        cdir_mat = dir_mat[~noiseIdx]
+        cvel = vel[~noiseIdx]
+        cvectorial_feature = vectorial_feature[~noiseIdx,:]
+        ctime = time[~noiseIdx]
+        sI_dict[mouse][signalName] = dict()
+
+        sI, binLabel, overlapMat, ssI = compute_structure_index(csignal, ctime, 
+                                                    n_neighbors=10, num_shuffles=100, verbose=True)
+        sI_dict[mouse][signalName]['time'] = {
+            'sI': sI,
+            'binLabel': binLabel,
+            'overlapMat': overlapMat,
+            'ssI': ssI
+        }
+
+        with open(os.path.join(saveDir,'sI_clean_dict.pkl'), 'wb') as f:
+            pickle.dump(sI_dict, f)
+
+
+
+ cells_to_keep =[ True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True, False,  True,  True, False,
+         True,  True, False,  True,  True,  True,  True,  True, False,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True,  True,  True, False,  True, False,
+         True,  True,  True,  True,  True,  True,  True,  True,  True,
+         True, False, False,  True,  True,  True,  True,  True,  True,
+         True,  True,  True,  True]
+
+
+
+false_cells = [14,  17,  20,  26, 105, 107, 118, 119]
+
+
+def compute_entanglement(points):
+    distance_b = pairwise_distances(points)
+    model_iso = Isomap(n_neighbors = 10, n_components = 1)
+    emb = model_iso.fit_transform(points)
+    distance_a = model_iso.dist_matrix_
+    entanglement_boundary = np.max(distance_a[1:,0])/np.min(distance_b[1:,0])
+    entanglement = np.max((distance_a[1:,0]/distance_b[1:,0]))
+    return (entanglement-1)/entanglement_boundary
+
+
+
+plt.figure()
+for mouse in ['GC2','GC3','GC5_nvista']:
+
+    filePath = os.path.join('/home/julio/Documents/SP_project/LT_DeepSup/functional_cells/', mouse, 'old')
+    remRemap = load_pickle(filePath, mouse+'remove_rotCells_dict.pkl')
+    angleRot = np.abs(remRemap['rotAngle'])
+    m = np.mean(angleRot, axis=0)*180/np.pi
+    sd = np.std(angleRot, axis=0)*180/np.pi
+    plt.plot(np.arange(m.shape[0]), m,label = mouse)
+    plt.fill_between(np.arange(m.shape[0]), m-sd, m+sd, alpha = 0.3)
+plt.legend()
+
+
+plt.figure()
+for mouse in ['GC2','GC3','GC5_nvista']:
+
+    filePath = os.path.join('/home/julio/Documents/SP_project/LT_DeepSup/functional_cells/', mouse, 'old')
+    remRemap = load_pickle(filePath, mouse+'remove_rotCells_dict.pkl')
+    sI = remRemap['SIVal']
+    m = np.mean(sI, axis=(0,1))
+    sd = np.std(sI, axis=(0,1))
+    plt.plot(np.arange(m.shape[0]), m,label = mouse)
+    plt.fill_between(np.arange(m.shape[0]), m-sd, m+sd, alpha = 0.3)
+plt.legend()
+
+
+    sI = remRemap['SIVal']
+
+a = load_pickle('/home/julio/Documents/SP_project/LT_DeepSup/functional_cells/GC2/', 'GC2remove_remapCells_dict.pkl')
+b = np.abs(a['rotAngle'])
+
+plt.figure()
+ax = plt.subplot(111)
+
+m = np.mean(b[:10,:],axis=0)
+sd = np.std(b[:10,:],axis=0)
+ax.plot(np.arange(m.shape[0]), m, color = '#32E653',label = '10')
+ax.fill_between(np.arange(m.shape[0]), m-sd, m+sd, color = '#32E653', alpha = 0.3)
+
+m = np.nanmean(b,axis=0)
+sd = np.nanstd(b,axis=0)
+ax.plot(np.arange(m.shape[0]), m, color = 'red',label = 'all')
+ax.fill_between(np.arange(m.shape[0]), m-sd, m+sd, color = 'red', alpha = 0.3)
+ax.legend()
+
+
+plt.figure()
+ax = plt.subplot(111)
+m = np.nanmean(b,axis=(0,1))
+sd = np.nanstd(b,axis=(0,1))
+ax.plot(np.arange(m.shape[0]), m, color = 'red',label = 'all')
+ax.fill_between(np.arange(m.shape[0]), m-sd, m+sd, color = 'red', alpha = 0.3)
+ax.legend()
+
+
+
+
+####################################################################
+miceList = ['M2019', 'M2023', 'M2024', 'M2025', 'M2026']
+
+data_dir = '/home/julio/Documents/SP_project/Fig1/dimensionality/inner_dim/'
+inner_dim = load_pickle(data_dir, 'inner_dim_dict.pkl')
+
+data_dir = '/home/julio/Documents/SP_project/Fig1/dimensionality/'
+iso_dim = load_pickle(data_dir, 'isomap_dim_dict.pkl')
+pca_dim = load_pickle(data_dir, 'pca_dim_dict.pkl')
+umap_dim = load_pickle(data_dir, 'umap_dim_dict.pkl')
+
+dim_list = list()
+mouse_list = list()
+for mouse in miceList:
+    dim_list.append(inner_dim[mouse]['abidsDim'])
+    dim_list.append(inner_dim[mouse]['corrIntDim'])
+    dim_list.append(inner_dim[mouse]['momDim'])
+    dim_list.append(inner_dim[mouse]['essDim'])
+    dim_list.append(inner_dim[mouse]['tleDim'])
+
+
+    mouse_list = mouse_list + [mouse]*5
+
+method_list = ['abids', 'CorrInt', 'MOM', 'ESS', 'TLE']*len(miceList)
+
+
+palette= ["#96A2A5", "#8ECAE6", "#219EBC", "#023047","#FFB703", "#FB8500"]
+pd_dim = pd.DataFrame(data={'mouse': mouse_list,
+                     'dim': dim_list,
+                     'method': method_list})    
+
+fig, ax = plt.subplots(1, 1, figsize=(10,6))
+b = sns.barplot(x='method', y='dim', data=pd_dim,
+            palette = palette, linewidth = 1, width= .5, ax = ax)
+sns.swarmplot(x='method', y='dim', data=pd_dim, 
+            color = 'gray', edgecolor = 'gray', ax = ax)
+b.tick_params(labelsize=12)
+b.set_ylim([0, 5])
+plt.tight_layout()
+plt.savefig(os.path.join(data_dir,'inner_dim_barplot_all.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(data_dir,'inner_dim_barplot_all.png'), dpi = 400,bbox_inches="tight")
+
+
+
+#######################################################################################################
+
+
+import scipy.signal as scs
+from scipy.ndimage import convolve1d
+from scipy import ndimage
+from scipy.ndimage import gaussian_filter1d
+
+#Adapted from PyalData package (19/10/21) (added variable win_length)
+def _norm_gauss_window(bin_size, std, num_std = 5):
+    """
+    Gaussian window with its mass normalized to 1
+
+    Parameters
+    ----------
+    bin_size (float): binning size of the array we want to smooth in same time 
+                units as the std
+    
+    std (float): standard deviation of the window use hw_to_std to calculate 
+                std based from half-width (same time units as bin_size)
+                
+    num_std (int): size of the window to convolve in #of stds
+
+    Returns
+    -------
+    win (1D np.array): Gaussian kernel with length: num_bins*std/bin_length
+                mass normalized to 1
+    """
+    win_len = int(num_std*std/bin_size)
+    if win_len%2==0:
+        win_len = win_len+1
+    win = scs.gaussian(win_len, std/bin_size)      
+    return win / np.sum(win)
+
+#Copied from PyalData package (19/10/21)
+def _hw_to_std(hw):
+    """
+    Convert half-width to standard deviation for a Gaussian window.
+    """
+    return hw / (2 * np.sqrt(2 * np.log(2)))
+
+#Copied from PyalData package (19/10/21)
+def _smooth_data(mat, bin_size=None, std=None, hw=None, win=None, axis=0):
+    """
+    Smooth a 1D array or every column of a 2D array
+
+    Parameters
+    ----------
+    mat : 1D or 2D np.array
+        vector or matrix whose columns to smooth
+        e.g. recorded spikes in a time x neuron array
+    bin_size : float
+        length of the timesteps in seconds
+    std : float (optional)
+        standard deviation of the smoothing window
+    hw : float (optional)
+        half-width of the smoothing window
+    win : 1D array-like (optional)
+        smoothing window to convolve with
+
+    Returns
+    -------
+    np.array of the same size as mat
+    """
+    #assert mat.ndim == 1 or mat.ndim == 2, "mat has to be a 1D or 2D array"
+    assert  sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw, or std"
+    if win is None:
+        assert bin_size is not None, "specify bin_size if not supplying window"
+        if std is None:
+            std = _hw_to_std(hw)
+        win = _norm_gauss_window(bin_size, std)
+    return convolve1d(mat, win, axis=axis, output=np.float32, mode='reflect')
+
+def _get_pdf(pos, neu_signal, mapAxis, dim, dir_mat = None):
+    """Obtain probability density function of 'pos' along each bin defined by 
+    the limits mapAxis as well as the mean signal of 'neu_signal' on those bins.
+    If dir_mat is provided, the above is computed for each possible direction.
+
+    Parameters
+    ----------
+    pos: numpy array (T, space_dims)
+        Numpy array with the position
+        
+    neu_signal: numpy array (T, nn)
+        Numpy array containing the neural signal (spikes, rates, or traces).
+
+    mapAxis: list
+        List with as many entries as spatial dimensions. Each entry contains 
+        the lower limits of the bins one wants to divide that spatial dimension 
+        into. 
+            e.g.
+            If we want to divide our 2D space, then mapAxis will contain 2 
+            entries. The first entry will have the lower limits of the x-bins 
+            and the second entry those of the y-bins.
+    
+    dim: integer
+        Integer indicating the number of spatial dimenions of the bins. That
+        is, 
+            dim = len(mapAxis) <= pos.shape[1]
+            
+    Optional parameters:
+    --------------------
+    dir_mat: numpy array (T,1)
+        Numpy array containing the labels of the direction the animal was 
+        moving on each timestamp. For each label, a separate pdf will be 
+        computed.
+        
+    Returns
+    -------
+    pos_pdf: numpy array (space_dims_bins, 1, dir_labels)
+        Numpy array containing the probability the animal is at each bin for
+        each of the directions if dir_mat was indicated.
+    
+    neu_pdf: numpy array (space_dims_bins, nn, dir_labels)
+        Numpy array containing the mean neural activity of each neuron at each 
+        bin for each of the directions if dir_mat was indicated.
+    """
+    if isinstance(dir_mat, type(None)):
+        dir_mat = np.zeros((pos.shape[0],1))
+        
+    val_dirs = np.array(np.unique(dir_mat))
+    num_dirs = len(val_dirs)
+                   
+    subAxis_length =  [len(mapsubAxis) for mapsubAxis in mapAxis] #nbins for each axis
+    access_neu = np.linspace(0,neu_signal.shape[1]-1,neu_signal.shape[1]).astype(int) #used to later access neu_pdf easily
+
+    neu_pdf = np.zeros(subAxis_length+[neu_signal.shape[1]]+[num_dirs])
+    pos_pdf = np.zeros(subAxis_length+[1]+[num_dirs])
+    
+    for sample in range(pos.shape[0]):
+        pos_entry_idx = list()
+        for d in range(dim):
+            temp_entry = np.where(pos[sample,d]>=mapAxis[d])
+            if np.any(temp_entry):
+                temp_entry = temp_entry[0][-1]
+            else:
+                temp_entry = 0
+            pos_entry_idx.append(temp_entry)
+        
+        dir_idx = np.where(dir_mat[sample]==val_dirs)[0][0]
+        pos_idxs = tuple(pos_entry_idx + [0]+[dir_idx])
+        neu_idxs = tuple(pos_entry_idx + [access_neu]+[dir_idx])
+        
+        pos_pdf[pos_idxs] += 1
+        neu_pdf[neu_idxs] += (1/pos_pdf[pos_idxs])* \
+                                   (neu_signal[sample,:]-neu_pdf[neu_idxs]) #online average
+    
+
+
+    pos_pdf = pos_pdf/np.sum(pos_pdf,axis=tuple(range(pos_pdf.ndim - 1))) #normalize probability density function
+    
+    return pos_pdf, neu_pdf
+
+def _get_edges(pos, limit, dim):
+    """Obtain which points of 'pos' are inside the limits of the border defined
+    by limit (%).
+    
+    Parameters
+    ----------
+    pos: numpy array
+        Numpy array with the position
+        
+    limit: numerical (%)
+        Limit (%) used to decided which points are kepts and which ones are 
+        discarded. (i.e. if limit=10 and pos=[0,100], only the points inside the
+                    range [10,90] will be kepts).
+    
+    dim: integer
+        Dimensionality of the division.    
+                
+    Returns
+    -------
+    signal: numpy array
+        Concatenated dataframe column into numpy array along axis=0.
+    """  
+    assert pos.shape[1]>=dim, f"pos has less dimensions ({pos.shape[1]}) " + \
+                                f"than the indicated in dim ({dim})"
+    norm_limit = limit/100
+    minpos = np.min(pos, axis=0)
+    maxpos = np.max(pos,axis=0)
+    
+    trackLength = maxpos - minpos
+    trackLimits = np.vstack((minpos + norm_limit*trackLength,
+                             maxpos - norm_limit*trackLength))
+    
+    points_inside_lim = list()
+    for d in range(dim):
+        points_inside_lim.append(np.vstack((pos[:,d]<trackLimits[0,d],
+                                       pos[:,d]>trackLimits[1,d])).T)
+        
+    points_inside_lim = np.concatenate(points_inside_lim, axis=1)
+    points_inside_lim = ~np.any(points_inside_lim ,axis=1)
+    
+    return points_inside_lim
+
+def get_neu_pdf(pos, neuSignal, vel = None, dim=2, **kwargs):
+    #smooth pos signal if applicable
+
+    if kwargs['std_pos']>0:
+        pos = _smooth_data(pos, std = kwargs['std_pos'], bin_size = 1/kwargs['sF'])
+    if pos.ndim == 1:
+        pos = pos.reshape(-1,1)
+
+    #Compute velocity if not provided
+    if isinstance(vel, type(None)):
+        vel = np.linalg.norm(np.diff(pos_signal, axis= 0), axis=1)*kwargs['sF']
+        vel = np.hstack((vel[0], vel))
+    vel = vel.reshape(-1)
+
+    #Compute dirSignal if not provided
+    if 'dirSignal' in kwargs:
+        dirSignal = kwargs["dirSignal"]
+    else:
+        dirSignal = np.zeros((pos.shape[0],1))
+
+    #Discard edges
+    if kwargs['ignoreEdges']>0:
+        posBoolean = _get_edges(pos, kwargs['ignoreEdges'], 1)
+        pos = pos[posBoolean]
+        neuSignal = neuSignal[posBoolean]
+        dirSignal = dirSignal[posBoolean]
+        vel = vel[posBoolean]
+
+    #compute moving epochs
+    moveEpochs = vel>=kwargs['velTh'] 
+    #keep only moving epochs
+    pos = pos[moveEpochs]
+    neuSignal = neuSignal[moveEpochs]
+    dirSignal = dirSignal[moveEpochs]
+    vel = vel[moveEpochs]
+        
+    #Create grid along each dimensions
+    minPos = np.percentile(pos,1, axis=0) #(pos.shape[1],)
+    maxPos = np.percentile(pos,99, axis = 0) #(pos.shape[1],)
+    obsLength = maxPos - minPos #(pos.shape[1],)
+    if 'binWidth' in kwargs:
+        binWidth = kwargs['binWidth']
+        if isinstance(binWidth, list):
+            binWidth = np.array(binWidth)
+        else:
+            binWidth = np.repeat(binWidth, dim, axis=0) #(pos.shape[1],)
+        nbins = np.ceil(obsLength[:dim]/binWidth).astype(int) #(pos.shape[1],)
+        kwargs['nbins'] = nbins
+    elif 'binNum' in kwargs:
+        nbins = kwargs['binNum']
+        if isinstance(nbins, list):
+            nbins = np.array(nbins)
+        else:
+            nbins = np.repeat(nbins, dim, axis=0) #(pos.shape[1],)
+        binWidth = np.round(obsLength[:dim]/nbins,4) #(pos.shape[1],)
+        kwargs['binWidth'] = binWidth
+    mapAxis = list()
+    for d in range(dim):
+        mapAxis.append(np.linspace(minPos[d], maxPos[d], nbins[d]+1)[:-1].reshape(-1,1)); #(nbins[d],)
+
+    #Compute probability density function
+    posPDF, neuPDF = _get_pdf(pos, neuSignal, mapAxis, dim, dirSignal)
+    for d in range(dim):
+        posPDF = _smooth_data(posPDF, std=kwargs['stdPDF'], bin_size=binWidth[d], axis=d)
+        neuPDF = _smooth_data(neuPDF, std=kwargs['stdPDF'], bin_size=binWidth[d], axis=d)
+    return posPDF, neuPDF, mapAxis
+
+
+supMice = ['CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4']
+
+
+dataDir = '/home/julio/Documents/SP_project/LT_DeepSup/processed_data/'
+saveDir = '/home/julio/Documents/SP_project/LT_DeepSup/place_cells/manifold_cells/pre/'
+placeDir = '/home/julio/Documents/SP_project/LT_DeepSup/place_cells/'
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+nNeigh = 120
+dim = 30
+minDist = 0.1
+
+for mouse in miceList:
+    fileName =  mouse+'_df_dict.pkl'
+    filePath = os.path.join(dataDir, mouse)
+    animal = load_pickle(filePath,fileName)
+    fnames = list(animal.keys())
+    fnamePre = [fname for fname in fnames if 'lt' in fname][0]
+
+    animalPre= copy.deepcopy(animal[fnamePre])
+
+    signal = copy.deepcopy(np.concatenate(animalPre['clean_traces'].values, axis = 0))
+    pos = copy.deepcopy(np.concatenate(animalPre['pos'].values, axis = 0))
+    direction = copy.deepcopy(np.concatenate(animalPre['dir_mat'].values, axis = 0))
+
+    model = umap.UMAP(n_neighbors=nNeigh, n_components=dim, min_dist=minDist)
+    model.fit(signal)
+    emb = model.transform(signal)
+    # emb = copy.deepcopy(np.concatenate(animalPre['umap'].values, axis = 0))
+
+    #load place cells
+    pcDict = load_pickle(placeDir, mouse+'_pc_dict.pkl')
+    pcPre = copy.deepcopy(pcDict[fnamePre])
+    neuPDF = pcPre['neu_pdf']
+    normNeuPDF = np.zeros(neuPDF.shape)
+    for d in range(neuPDF.shape[2]):
+        for c in range(neuPDF.shape[1]):
+            normNeuPDF[:,c,d] = neuPDF[:,c,d]/np.max(neuPDF[:,c,d])
+    order =  np.argsort(np.argmax(normNeuPDF[:,:,0], axis=0))
+
+
+    meanNormNeuPDF = np.nanmean(normNeuPDF, axis=1)
+    mapAxis = pcPre['mapAxis']
+    manifoldSignal = np.zeros((emb.shape[0]))
+    for p in range(emb.shape[0]):
+        try:
+            x = np.where(mapAxis[0]<=pos[p,0])[0][-1]
+        except: 
+            x = 0
+        dire = direction[p]
+        if dire==0:
+            manifoldSignal[p] = 0
+        else:
+            manifoldSignal[p] = meanNormNeuPDF[x,dire-1]
+
+    fig = plt.figure()
+    ax = plt.subplot(2,2,1)
+    ax.matshow(normNeuPDF[:,order,0].T, aspect = 'auto')
+    ax.set_title('izq')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+    ax = plt.subplot(2,2,2)
+    ax.matshow(normNeuPDF[:,order,1].T, aspect = 'auto')
+    ax.set_title('dcha')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+
+    ax = plt.subplot(2,2,3, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = pos[:,0],s = 30, cmap = 'inferno')
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+
+    ax = plt.subplot(2,2,4, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = manifoldSignal,s = 30)
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    fig.suptitle(mouse)
+
+
+
+
+
+
+    emb = copy.deepcopy(np.concatenate(animalPre['umap'].values, axis = 0))
+    signal = copy.deepcopy(np.concatenate(animalPre['clean_traces'].values, axis = 0))
+    pos = copy.deepcopy(np.concatenate(animalPre['pos'].values, axis = 0))
+    vel = copy.deepcopy(np.concatenate(animalPre['vel'].values, axis = 0))
+
+    posPDF, neuPDF, mapAxis = get_neu_pdf(pos,signal, vel = vel, dim= 1, **params)
+    neuPDF_norm = np.zeros((neuPDF.shape[0],neuPDF.shape[1]))
+    for c in range(neuPDF.shape[1]):
+        neuPDF_norm[:,c] = neuPDF[:,c,0]/np.max(neuPDF[:,c,0])
+
+    mneuPDF = np.nanmean(neuPDF_norm, axis=1)
+
+    manifoldSignal = np.zeros((emb.shape[0]))
+    for p in range(emb.shape[0]):
+        try:
+            x = np.where(mapAxis[0]<=pos[p,0])[0][-1]
+        except: 
+            x = 0
+        manifoldSignal[p] = mneuPDF[x]
+    manifoldSignal = gaussian_filter1d(manifoldSignal, sigma = 3, axis = 0)
+    pcManifoldDict[mouse] = {
+        'emb': emb,
+        'pos': pos,
+        'signal': signal,
+        'vel': vel,
+        'mapAxis': mapAxis,
+        'posPDF': posPDF,
+        'neuPDF': neuPDF,
+        'mneuPDF': mneuPDF,
+        'manifoldSignal': manifoldSignal,
+        'fname': fnamePre,
+        'params': params
+    }
+
+    fig = plt.figure(figsize=(15,5))
+    ax = plt.subplot(1,2,1, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = pos[:,0],s = 30, cmap = 'inferno')
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    # ax.view_init(130,110,90)
+    ax.view_init(-65,-85,90)
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    ax = plt.subplot(1,2,2, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = manifoldSignal,s = 30)
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    # ax.view_init(130,110,90)
+    ax.view_init(-65,-85,90)
+
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    plt.savefig(os.path.join(saveDir,mouse+'_PDF_emb.svg'), dpi = 400,bbox_inches="tight")
+    plt.savefig(os.path.join(saveDir,mouse+'_PDF_emb.png'), dpi = 400,bbox_inches="tight")
+
+    with open(os.path.join(saveDir, "manifold_pc_dict.pkl"), "wb") as file:
+        pickle.dump(pcManifoldDict, file, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+plt.figure()
+plt.scatter(*pos.T,c=np.mean(signal,axis=1))
+
+
+#############################################################################################
+import sys, os, copy, pickle, timeit
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-
-from neural_manifold import general_utils as gu
-from neural_manifold import decoders as dec
-from neural_manifold import place_cells as pc
-from neural_manifold import dimensionality_reduction as dim_red
-
-from scipy.stats import pearsonr
+import neural_manifold.general_utils as gu
 from scipy.ndimage import gaussian_filter1d, uniform_filter1d
 from scipy.signal import find_peaks
+from neural_manifold import dimensionality_reduction as dim_red
 import seaborn as sns
-from kneed import KneeLocator
-
+from neural_manifold.dimensionality_reduction import validation as dim_validation 
 import umap
+from kneed import KneeLocator
 from sklearn.manifold import Isomap
-from sklearn.decomposition import PCA
-
 from sklearn.metrics import pairwise_distances
+from sklearn.decomposition import PCA
 from structure_index import compute_structure_index, draw_graph
-from statistics import mode
+from neural_manifold import decoders as dec
+from scipy.stats import pearsonr
+import random
 
 def load_pickle(path,name):
     with open(os.path.join(path, name), 'rb') as sf:
@@ -33,6 +688,7 @@ def filter_noisy_outliers(data, D=None):
     np.fill_diagonal(D, np.nan)
     nnDist = np.sum(D < np.nanpercentile(D,5), axis=1)
     noiseIdx = nnDist < np.percentile(nnDist, 20)
+    sum(noiseIdx)
     return noiseIdx
 
 def get_centroids(input_A, label_A, dir_A = None, ndims = 2, nCentroids = 20):
@@ -99,12 +755,6 @@ def add_dir_mat_field(pdMouse):
                             4*('F' in pdOut["dir"][idx]) for idx in pdOut.index]
     return pdOut
 
-def add_inner_trial_time_field(pdMouse):
-    pdOut = copy.deepcopy(pdMouse)
-    pdOut["inner_trial_time"] = [np.arange(pdOut["pos"][idx].shape[0]).reshape(-1,1).astype(int)
-                        for idx in pdOut.index]
-    return pdOut
-
 def preprocess_traces(pdMouse, signal_field, sigma = 5, sig_up = 4, sig_down = 12, peak_th=0.1):
     pdOut = copy.deepcopy(pdMouse)
 
@@ -151,9 +801,10 @@ def preprocess_traces(pdMouse, signal_field, sigma = 5, sig_up = 4, sig_down = 1
 #|                                                                        |#
 #|                             PREPROCESS DATA                            |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 dataDir = '/home/julio/Documents/SP_project/LT_DeepSup/data/'
-saveDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
+saveDir = '/home/julio/Documents/SP_project/Fig2v2/processed_data/'
 
 #%% PARAMS
 sigma = 6
@@ -161,7 +812,7 @@ upSig = 4
 downSig = 12
 signalField = 'raw_traces'
 peakTh = 0.1
-velTh = 6
+velTh = 3
 verbose = True
 
 for mouse in miceList:
@@ -191,8 +842,6 @@ for mouse in miceList:
     print(f'Working on session: {sessionPre}')
     #%% 2. PROCESS DATA
     pdMouse = add_dir_mat_field(pdMouse)
-    pdMouse = add_inner_trial_time_field(pdMouse)
-
     #2.1 keep only moving epochs
     print(f'2.1 Dividing into moving/still data w/ velTh= {velTh:.2f}.')
     if velTh>0:
@@ -247,13 +896,14 @@ for mouse in miceList:
 #|________________________________________________________________________|#
 import skdim
 import time
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 params = {
     'signalName': 'clean_traces',
     'nNeigh': 30,
     'verbose': True
 }
+
 saveDir =  '/home/julio/Documents/SP_project/Fig2/dimensionality/inner_dim'
 try:
     os.mkdir(saveDir)
@@ -350,11 +1000,12 @@ with saveParamsFile as saveFile:
     [saveFile.write("%s\n" %st) for st in paramsList]
 saveParamsFile.close()
 
+
 #__________________________________________________________________________
 #|                                                                        |#
 #|                                UMAP DIM                                |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 
 params = {
     'maxDim':10,
@@ -375,7 +1026,7 @@ for mouse in miceList:
     #signal
     signal = np.concatenate(pdMouse[params['signalName']].values, axis = 0)
     print("Computing rank indices og space...", end = '', sep = '')
-    rankIdx = dim_red.validation.compute_rank_indices(signal)
+    rankIdx = dim_validation.compute_rank_indices(signal)
     print("\b\b\b: Done")
     trustNum = np.zeros((params['maxDim'],))
     contNum = np.zeros((params['maxDim'],))
@@ -388,12 +1039,12 @@ for mouse in miceList:
         print("\b\b\b: Done")
         #1. Compute trustworthiness
         print("\tComputing trustworthiness...", sep= '', end = '')
-        temp = dim_red.validation.trustworthiness_vector(signal, emb, params['nnDim'], indices_source = rankIdx)
+        temp = dim_validation.trustworthiness_vector(signal, emb, params['nnDim'], indices_source = rankIdx)
         trustNum[dim] = temp[-1]
         print(f"\b\b\b: {trustNum[dim]:.4f}")
         #2. Compute continuity
         print("\tComputing continuity...", sep= '', end = '')
-        temp = dim_red.validation.continuity_vector(signal, emb ,params['nnDim'])
+        temp = dim_validation.continuity_vector(signal, emb ,params['nnDim'])
         contNum[dim] = temp[-1]
         print(f"\b\b\b: {contNum[dim]:.4f}")
 
@@ -440,7 +1091,8 @@ saveParamsFile.close()
 #|                                                                        |#
 #|                               ISOMAP DIM                               |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 params = {
     'maxDim':10,
     'nNeigh': 120,
@@ -525,7 +1177,7 @@ saveParamsFile.close()
 #|                                                                        |#
 #|                                 PCA DIM                                |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 params = {
     'signalName': 'clean_traces',
 }
@@ -581,7 +1233,7 @@ saveParamsFile.close()
 #|                                                                        |#
 #|                              SAVE DIM RED                              |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 params = {
     'dim':3,
     'nNeigh': 120,
@@ -681,188 +1333,19 @@ for mouse in miceList:
 
 #__________________________________________________________________________
 #|                                                                        |#
-#|                           COMPUTE SI NN ABS                            |#
-#|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-saveDir = '/home/julio/Documents/SP_project/Fig2/SI/'
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-sIDict = dict()
-featParamsDict = {
-    'pos': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False},
-    'dir': {'discrete_label':True, 'num_shuffles':100, 'verbose':False},
-    'vel': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False},
-    '(pos,dir)': {'discrete_label':[False, True], 'num_shuffles':1, 'verbose':False},
-    'globalTime': {'discrete_label':False, 'n_bins':20, 'num_shuffles':1, 'verbose':False},
-    'trial': {'discrete_label':False, 'n_bins':20, 'num_shuffles':1, 'verbose':False},
-    'trialTime': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False}
-}
-nnList = [5,15,25,50,100,250]
-for mouse in miceList:
-    print(f"\nWorking on mouse {mouse}: ")
-    sIDict[mouse] = dict()
-    fileName =  mouse+'_df_dict.pkl'
-    filePath = os.path.join(dataDir, mouse)
-    pdMouse = load_pickle(filePath,fileName)
-    #keep only right left trials
-    pdMouse = gu.select_trials(pdMouse,"dir == ['N','L','R']")
-    #get data
-    pos = copy.deepcopy(np.concatenate(pdMouse['pos'].values, axis=0))
-    dirMat = copy.deepcopy(np.concatenate(pdMouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pdMouse['vel'].values, axis=0))
-    vecFeat = np.concatenate((pos[:,0].reshape(-1,1),dirMat),axis=1)
-    time = np.arange(pos.shape[0])
-    trial = copy.deepcopy(np.concatenate(pdMouse['index_mat'].values, axis=0))
-    trialTime = copy.deepcopy(np.concatenate(pdMouse['inner_trial_time'].values, axis=0))
-
-    for signalName in ['clean_traces', 'umap', 'isomap', 'pca']:
-        signal = copy.deepcopy(np.concatenate(pdMouse[signalName].values, axis=0))
-        if signalName == 'pca' or signalName =='isomap':
-            signal = signal[:,:3]
-        D = pairwise_distances(signal)
-        noiseIdx = filter_noisy_outliers(signal,D=D)
-        csignal = signal[~noiseIdx,:]
-
-        featDict = {
-            'pos': pos[~noiseIdx,0],
-            'dir': dirMat[~noiseIdx],
-            'vel': vel[~noiseIdx],
-            '(pos,dir)': vecFeat[~noiseIdx,:],
-            'globalTime': time[~noiseIdx],
-            'trial': trial[~noiseIdx],
-            'trialTime': trialTime[~noiseIdx]
-        }
-        sIDict[mouse][signalName] = dict()
-        sIDict[mouse][signalName]['featDict'] = featDict
-        sIDict[mouse][signalName]['featParamsDict'] = featParamsDict
-        sIDict[mouse][signalName]['signalDict'] = {
-                                                'signal': signal,
-                                                'csignal': csignal,
-                                                'noiseIdx': noiseIdx
-                                                }
-        sIDict[mouse][signalName]['results'] = dict()
-        for featName in list(featDict.keys()):
-            sI = np.zeros((len(nnList),))*np.nan
-            binLabel = list()
-            overlapMat = list()
-            ssI = np.zeros((len(nnList),featParamsDict[featName]['num_shuffles']))
-
-            for nnIdx in range(len(nnList)):
-                print(f'\t{signalName} - {featName}: {nnList[nnIdx]} ({nnIdx+1}/{len(nnList)})', end='\r', flush=True)
-                nn = nnList[nnIdx]
-                sI[nnIdx], tbinLabel, toverlapMat, ssI[nnIdx] = compute_structure_index(csignal, featDict[featName], 
-                                            n_neighbors=nn, **featParamsDict[featName])
-                binLabel.append(tbinLabel)
-                overlapMat.append(toverlapMat)
-            print(f'\t{signalName} - {featName}: {np.nanmean(sI)}')
-            sIDict[mouse][signalName]['results'][featName] = {
-                'sI': sI,
-                'binLabel': binLabel,
-                'overlapMat': overlapMat,
-                'ssI': ssI,
-                'nnList': nnList,
-                'params': featParamsDict[featName]
-            }
-
-        with open(os.path.join(saveDir,'sI_abs_dict.pkl'), 'wb') as f:
-            pickle.dump(sIDict, f)
-
-#__________________________________________________________________________
-#|                                                                        |#
-#|                          COMPUTE SI NN PERC                            |#
-#|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7']#, 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-saveDir = '/home/julio/Documents/SP_project/Fig2/SI/'
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-sIDict = dict()
-featParamsDict = {
-    'pos': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False},
-    'dir': {'discrete_label':True, 'num_shuffles':1, 'verbose':False},
-    'vel': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False},
-    '(pos,dir)': {'discrete_label':[False, True], 'num_shuffles':1, 'verbose':False},
-    'globalTime': {'discrete_label':False, 'n_bins':20, 'num_shuffles':1, 'verbose':False},
-    'trial': {'discrete_label':False, 'n_bins':20, 'num_shuffles':1, 'verbose':False},
-    'trialTime': {'discrete_label':False, 'n_bins':10, 'num_shuffles':1, 'verbose':False}
-}
-nnPercList = [0.002, 0.005, 0.01, 0.012, 0.015, 0.02, 0.05]
-minnnList = [3,5,15,25,30, 50,50,50]
-for mouse in miceList:
-
-    print(f"\nWorking on mouse {mouse}: ")
-    sIDict[mouse] = dict()
-    fileName =  mouse+'_df_dict.pkl'
-    filePath = os.path.join(dataDir, mouse)
-    pdMouse = load_pickle(filePath,fileName)
-    #keep only right left trials
-    pdMouse = gu.select_trials(pdMouse,"dir == ['N','L','R']")
-    #get data
-    pos = copy.deepcopy(np.concatenate(pdMouse['pos'].values, axis=0))
-    dirMat = copy.deepcopy(np.concatenate(pdMouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pdMouse['vel'].values, axis=0))
-    vecFeat = np.concatenate((pos[:,0].reshape(-1,1),dirMat),axis=1)
-    time = np.arange(pos.shape[0])
-    trial = copy.deepcopy(np.concatenate(pdMouse['index_mat'].values, axis=0))
-    trialTime = copy.deepcopy(np.concatenate(pdMouse['inner_trial_time'].values, axis=0))
-
-    for signalName in ['clean_traces', 'umap','isomap', 'pca']:
-        signal = copy.deepcopy(np.concatenate(pdMouse[signalName].values, axis=0))
-        if signalName == 'pca' or signalName =='isomap':
-            signal = signal[:,:3]
-        D = pairwise_distances(signal)
-        noiseIdx = filter_noisy_outliers(signal,D=D)
-        csignal = signal[~noiseIdx,:]
-
-        featDict = {
-            'pos': pos[~noiseIdx,0],
-            'dir': dirMat[~noiseIdx],
-            'vel': vel[~noiseIdx],
-            '(pos,dir)': vecFeat[~noiseIdx,:],
-            'globalTime': time[~noiseIdx],
-            'trial': trial[~noiseIdx],
-            'trialTime': trialTime[~noiseIdx]
-        }
-
-        nnList = [np.max([np.round(nnPercList[idx]*csignal.shape[0]).astype(int),minnnList[idx]]) for idx in range(len(nnPercList))]
-        sIDict[mouse][signalName] = dict()
-        sIDict[mouse][signalName]['featDict'] = featDict
-        sIDict[mouse][signalName]['featParamsDict'] = featParamsDict
-        sIDict[mouse][signalName]['signalDict'] = {
-                                                'signal': signal,
-                                                'csignal': csignal,
-                                                'noiseIdx': noiseIdx
-                                                }
-        sIDict[mouse][signalName]['results'] = dict()
-        for featName in list(featDict.keys()):
-            sI = np.zeros((len(nnList),))*np.nan
-            binLabel = list()
-            overlapMat = list()
-            ssI = np.zeros((len(nnList),featParamsDict[featName]['num_shuffles']))
-
-            for nnIdx in range(len(nnList)):
-                print(f'\t{signalName} - {featName}: {nnList[nnIdx]} ({nnIdx+1}/{len(nnList)})', end='\r', flush=True)
-                nn = nnList[nnIdx]
-                sI[nnIdx], tbinLabel, toverlapMat, ssI[nnIdx] = compute_structure_index(csignal, featDict[featName], 
-                                            n_neighbors=nn, **featParamsDict[featName])
-                binLabel.append(tbinLabel)
-                overlapMat.append(toverlapMat)
-            print(f'\t{signalName} - {featName}: {np.nanmean(sI)}')
-            sIDict[mouse][signalName]['results'][featName] = {
-                'sI': sI,
-                'binLabel': binLabel,
-                'overlapMat': overlapMat,
-                'ssI': ssI,
-                'nnList': nnList,
-                'nnPercList': nnPercList,
-                'params': featParamsDict[featName]
-            }
-
-        with open(os.path.join(saveDir,'sI_perc_dict.pkl'), 'wb') as f:
-            pickle.dump(sIDict, f)
-
-#__________________________________________________________________________
-#|                                                                        |#
 #|                      COMPUTE ELLIPSE ECCENTRICITY                      |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+def filter_noisy_outliers(data, D=None):
+    if isinstance(D, type(None)):
+        D = pairwise_distances(data)
+    np.fill_diagonal(D, np.nan)
+    nn_dist = np.sum(D < np.nanpercentile(D,10), axis=1)
+    noiseIdx = nn_dist < np.percentile(nn_dist, 20)
+    sum(noiseIdx)
+    return noiseIdx
+
+
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 dataDir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
 saveDir = '/home/julio/Documents/SP_project/Fig2/eccentricity/'
 ellipseDict = dict()
@@ -891,8 +1374,9 @@ for mouse in miceList:
     cent2D = modelPCA.transform(cent)
     cent2D = cent2D - np.tile(np.mean(cent2D,axis=0), (cent2D.shape[0],1))
 
-    # cent2D = get_centroids(cemb2D, cpos[:,0],cdirMat, ndims = 2, nCentroids=40)  
-    # cent2D = cent2D - np.tile(np.mean(cent2D,axis=0), (cent2D.shape[0],1))
+    plt.figure()
+    ax = plt.subplot(1,2,1, projection = '3d')
+    ax.scatter(*emb[:,:3].T, c = pos[:,0], s=10, cmap = 'magma')
 
     ########################
     #         PRE          #
@@ -902,7 +1386,7 @@ for mouse in miceList:
     Y = cent2D[:,1].reshape(-1,1)
     A = np.hstack([X**2, X * Y, Y**2, X, Y])
     b = np.ones_like(cent2D[:,0])
-    x = np.linalg.lstsq(A, b, rcond=-1)[0].squeeze()
+    x = np.linalg.lstsq(A, b)[0].squeeze()
 
     xLim = [np.min(cent2D[:,0]), np.max(cent2D[:,0])]
     yLim = [np.min(cent2D[:,1]), np.max(cent2D[:,1])]
@@ -923,170 +1407,29 @@ for mouse in miceList:
     y0 = (x[1]*x[3] - 2*x[0]*x[4])/(4*x[0]*x[2] - x[1]**2)
     center = [x0, y0]
 
-    #assign to each point a pos and direction value according to closest k-neighbors
-    k = 50
-    cemb2D = modelPCA.transform(cemb)
-    featEllipse = np.zeros((xValid.shape[0],2))
-    for idx in range(xValid.shape[0]):
-        point = [xValid[idx], yValid[idx]]
-        d = ((cemb2D - point)**2).sum(axis=1)
-        nIdx = d.argsort()[:k]  
-        featEllipse[idx,:] = [np.mean(cpos[nIdx,0]), mode(cdirMat[nIdx].T.tolist()[0])]
+    #Compute Excentricity
+    distEllipse = np.sqrt((xValid-center[0])**2 + (yValid-center[1])**2)
+    pointLong = [xValid[np.argmax(distEllipse)], yValid[np.argmax(distEllipse)]]
+    pointShort = [xValid[np.argmin(distEllipse)], yValid[np.argmin(distEllipse)]]
+    longAxis = np.max(distEllipse)
+    shortAxis = np.min(distEllipse)
 
-    #Find axis of features gradient
-    nSteps = 200
-    angleArray = np.linspace(0, np.pi, nSteps)
-    corrDir = np.zeros((nSteps,2))*np.nan
-    ellipsePoints = np.concatenate((xValid.reshape(-1,1), yValid.reshape(-1,1)), axis=1)
-    centeredPoints = ellipsePoints - center
-    for idx, angle in enumerate(angleArray):
-        unitDir = [np.cos(angle), np.sin(angle)]
-        ellipseProjected = np.sum(centeredPoints*unitDir, axis=1)
-        corrDir[idx,0] = np.abs(np.corrcoef(ellipseProjected,featEllipse[:,0])[0,1])
-        corrDir[idx,1] = np.abs(np.corrcoef(ellipseProjected,featEllipse[:,1])[0,1])
-    #find perendicular directions that maximize corrDir
-    ortAngleIdx = np.argmin(np.abs(angleArray-np.pi/2))
-
-    mixedCorrelation = 0.3*corrDir[:,0] + 0.2*(1 - corrDir[:,1]) + \
-                        0.2*(1-np.roll(corrDir[:, 0],-ortAngleIdx)) + 0.3*np.roll(corrDir[:, 1],-ortAngleIdx)
-
-    # mixedCorrelation = 0.7*corrDir[:,0] + 0.3*np.roll(corrDir[:, 1],-ortAngleIdx)
-    bestAngleIdx = np.argmax(mixedCorrelation)
-    #Find length of axis
-    posAngle = angleArray[bestAngleIdx]
-    posUnitDir = [np.cos(posAngle), np.sin(posAngle)]
-    posAxisProjection = np.sum(centeredPoints*posUnitDir, axis=1)
-    posLength = np.percentile(posAxisProjection,95) - np.percentile(posAxisProjection,5)
-
-    dirAngle = angleArray[bestAngleIdx]+np.pi/2
-    if dirAngle >= np.pi: dirAngle -= np.pi
-    dirUnitDir = [np.cos(dirAngle), np.sin(dirAngle)]
-    dirAxisProjection = np.sum(centeredPoints*dirUnitDir, axis=1)
-    dirLength = np.percentile(dirAxisProjection,95) - np.percentile(dirAxisProjection,5)
-    eccentricity = posLength/dirLength
-
-    #Plot computations
-    plotLims = [np.min([xLim[0], yLim[0]]), np.max([xLim[1], yLim[1]])]
-    plotLims = [0.15*x + x for x in plotLims]
-    embPlotLims = [np.min(cemb2D, axis=(0,1)), np.max(cemb2D, axis=(0,1))]
-    embPlotLims = [0.15*x + x for x in embPlotLims]
-    xposLine = np.array(range(np.floor(plotLims[0]).astype(int), np.ceil(plotLims[1]).astype(int)))
-    ellipDirColor = np.zeros((featEllipse.shape[0],3))
-    for point in range(featEllipse.shape[0]):
-        if featEllipse[point,1]==0:
-            ellipDirColor[point] = [14/255,14/255,143/255]
-        elif featEllipse[point,1]==1:
-            ellipDirColor[point] = [12/255,136/255,249/255]
-        else:
-            ellipDirColor[point] = [17/255,219/255,224/255]
-
-    embDirColor = np.zeros((cdirMat.shape[0],3))
-    for point in range(cdirMat.shape[0]):
-        if cdirMat[point]==0:
-            embDirColor[point] = [14/255,14/255,143/255]
-        elif cdirMat[point]==1:
-            embDirColor[point] = [12/255,136/255,249/255]
-        else:
-            embDirColor[point] = [17/255,219/255,224/255]
-
-    fig = plt.figure(figsize=(15,6))
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,0), rowspan=1, colspan = 1, projection = '3d')
-    b = ax.scatter(*cemb[:,:3].T, c = cpos[:,0], cmap = 'inferno',s = 10)
-    ax.set_xlabel('Dim 1', labelpad = -8)
-    ax.set_ylabel('Dim 2', labelpad = -8)
-    ax.set_zlabel('Dim 3', labelpad = -8)
-    ax.set_aspect('equal', adjustable='box')
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(1,0), rowspan=1, colspan = 1, projection = '3d')
-    b = ax.scatter(*cemb[:,:3].T, color=embDirColor,s = 10)
-    ax.set_xlabel('Dim 1', labelpad = -8)
-    ax.set_ylabel('Dim 2', labelpad = -8)
-    ax.set_zlabel('Dim 3', labelpad = -8)
-    ax.set_aspect('equal', adjustable='box')
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,1), rowspan=2, colspan = 2)
-    ax.scatter(*cemb2D[:,:3].T, c = cpos[:,0], s=10, cmap = 'magma')
+    #Plot
+    ax = plt.subplot(1,2,2)
+    ax.scatter(*cent2D[:,:2].T, color ='b', s=10)
+    plt.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
+    plt.scatter(center[0], center[1], color = 'm', s=30)
     ax.scatter(xValid, yValid, color ='m', s=10)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.set_xlim(embPlotLims)
-    ax.set_ylim(embPlotLims)
+    ax.plot([center[0],pointLong[0]], [center[1], pointLong[1]], color = 'c')
+    ax.plot([center[0],pointShort[0]], [center[1], pointShort[1]], color = 'c')
+    ax.set_xlim(np.min(cent2D[:,0])-0.2, np.max(cent2D[:,0])+0.2)
+    ax.set_ylim(np.min(cent2D[:,1])-0.2, np.max(cent2D[:,1])+0.2)
+    ax.set_xlim([np.min([xLim[0], yLim[0]]),np.max([xLim[1], yLim[1]])])
+    ax.set_ylim([np.min([xLim[0], yLim[0]]),np.max([xLim[1], yLim[1]])])
     ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"2D embedding and ellipse")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,3), rowspan=1, colspan = 1)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.scatter(xValid, yValid, c = featEllipse[:,0], s=10, cmap = 'magma')
-    yposLine= posUnitDir[1]/posUnitDir[0]*xposLine 
-    ax.plot(xposLine,yposLine, color = 'r', linestyle='--')
-    ax.set_xlim(plotLims)
-    ax.set_ylim(plotLims)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"Length pos: {posLength:2f}")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(1,3), rowspan=1, colspan = 1)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.scatter(xValid, yValid, s=10, color=ellipDirColor)
-    yposLine= dirUnitDir[1]/dirUnitDir[0]*xposLine 
-    ax.plot(xposLine,yposLine, color = 'r', linestyle='--')
-    ax.set_xlim(plotLims)
-    ax.set_ylim(plotLims)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"Length dir: {dirLength:2f}")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,4), rowspan=2, colspan = 1)
-    ax.plot(corrDir[:,0], angleArray, color = 'b', label = 'position')
-    ax.plot(corrDir[:,1], angleArray, color = 'orange',  label = 'direction')
-    ax.plot(mixedCorrelation, angleArray, color = 'k',  label = 'mixed')
-    ax.plot([0,1], [posAngle,posAngle], color = 'b', linestyle= '--')
-    ax.plot([0,1], [dirAngle,dirAngle], color = 'orange', linestyle= '--')
-    ax.set_yticks([0, np.pi/4, np.pi/2, 3*np.pi/4, np.pi])
-    ax.set_ylabel('Angle of projection')
-    ax.set_xlabel('Correlation Coefficient')
-    ax.set_title(f"{mixedCorrelation[bestAngleIdx]:2f}")
-    ax.legend()
-    plt.suptitle(f"{mouse} - Eccentricity: {eccentricity:4f}")
+    ax.set_title(f"{longAxis/shortAxis:4f}")
+    plt.suptitle(mouse)
     plt.tight_layout()
-
-    retval = -1
-    def onclick(event):
-        print('button=%d, x=%d, y=%d, xdata=%f, ydata=%f'%(event.button, event.x, event.y, event.xdata, event.ydata))
-        # Record the x location of the user's click in the global variable and close the figure
-        global retval
-        retval = event.ydata
-        plt.close()
-    cid = fig.canvas.mpl_connect('button_press_event', onclick)
-    # Bring up the figure (and wait)
-    plt.show()
-
-    #Find length of axis
-    bestAngleIdx = np.argmin(np.abs(angleArray - retval))    
-    #Find length of axis
-    posAngle = angleArray[bestAngleIdx]
-    posUnitDir = [np.cos(posAngle), np.sin(posAngle)]
-    posAxisProjection = np.sum(centeredPoints*posUnitDir, axis=1)
-    posLength = np.percentile(posAxisProjection,95) - np.percentile(posAxisProjection,5)
-
-    dirAngle = angleArray[bestAngleIdx]+np.pi/2
-    if dirAngle >= np.pi: dirAngle -= np.pi
-    dirUnitDir = [np.cos(dirAngle), np.sin(dirAngle)]
-    dirAxisProjection = np.sum(centeredPoints*dirUnitDir, axis=1)
-    dirLength = np.percentile(dirAxisProjection,95) - np.percentile(dirAxisProjection,5)
-
-
-    #Compute eccentricity
-    eccentricity = posLength/dirLength
-    print(posAngle, eccentricity)
 
     ellipseDict[mouse] = {
         'pos':pos,
@@ -1099,7 +1442,6 @@ for mouse in miceList:
         'cemb': cemb,
         'cent': cent,
         'cent2D': cent2D,
-        'cemb2D': cemb2D,
         'ellipseCoeff': x,
         'xLim': xLim,
         'yLim': yLim,
@@ -1110,179 +1452,55 @@ for mouse in miceList:
         'xValid': xValid,
         'yValid': yValid,
         'center': center,
-        'angleArray': angleArray,
-        'corrDir':corrDir,
-        'ellipsePoints': ellipsePoints,
-        'centeredPoints':centeredPoints,
-        'ortAngleIdx':ortAngleIdx,
-        'mixedCorrelation': mixedCorrelation,
-        'bestAngleIdx': bestAngleIdx,
-        'posAngle': posAngle,
-        'posUnitDir': posUnitDir,
-        'posAxisProjection': posAxisProjection,
-        'posLength': posLength,
-        'dirAngle': dirAngle,
-        'dirUnitDir': dirUnitDir,
-        'dirAxisProjection': dirAxisProjection,
-        'dirLength': dirLength,
-        'eccentricity': eccentricity
+        'distEllipse': distEllipse,
+        'pointLong': pointLong,
+        'pointShort': pointShort,
+        'longAxis': longAxis,
+        'shortAxis': shortAxis,
+        'eccentricity': longAxis/shortAxis
     }
 
     with open(os.path.join(saveDir,'ellipse_fit_dict.pkl'), 'wb') as f:
         pickle.dump(ellipseDict, f)
 
-
-    fig = plt.figure(figsize=(15,6))
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,0), rowspan=1, colspan = 1, projection = '3d')
-    b = ax.scatter(*cemb[:,:3].T, c = cpos[:,0], cmap = 'inferno',s = 10)
-    ax.set_xlabel('Dim 1', labelpad = -8)
-    ax.set_ylabel('Dim 2', labelpad = -8)
-    ax.set_zlabel('Dim 3', labelpad = -8)
-    ax.set_aspect('equal', adjustable='box')
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(1,0), rowspan=1, colspan = 1, projection = '3d')
-    b = ax.scatter(*cemb[:,:3].T, color=embDirColor,s = 10)
-    ax.set_xlabel('Dim 1', labelpad = -8)
-    ax.set_ylabel('Dim 2', labelpad = -8)
-    ax.set_zlabel('Dim 3', labelpad = -8)
-    ax.set_aspect('equal', adjustable='box')
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,1), rowspan=2, colspan = 2)
-    ax.scatter(*cemb2D[:,:3].T, c = cpos[:,0], s=10, cmap = 'magma')
-    ax.scatter(xValid, yValid, color ='m', s=10)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.set_xlim(embPlotLims)
-    ax.set_ylim(embPlotLims)
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"2D embedding and ellipse")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,3), rowspan=1, colspan = 1)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.scatter(xValid, yValid, c = featEllipse[:,0], s=10, cmap = 'magma')
-    yposLine= posUnitDir[1]/posUnitDir[0]*xposLine 
-    ax.plot(xposLine,yposLine, color = 'r', linestyle='--')
-    ax.set_xlim(plotLims)
-    ax.set_ylim(plotLims)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"Length pos: {posLength:2f}")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(1,3), rowspan=1, colspan = 1)
-    ax.scatter(*cent2D[:,:2].T, color ='b', s=20)
-    ax.contour(X_coord, Y_coord, Z_coord, levels=[1], colors=('r'), linewidths=1)
-    ax.scatter(center[0], center[1], color = 'm', s=30)
-    ax.scatter(xValid, yValid, s=10, color=ellipDirColor)
-    yposLine= dirUnitDir[1]/dirUnitDir[0]*xposLine 
-    ax.plot(xposLine,yposLine, color = 'r', linestyle='--')
-    ax.set_xlim(plotLims)
-    ax.set_ylim(plotLims)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_aspect('equal', adjustable='box')
-    ax.set_title(f"Length dir: {dirLength:2f}")
-
-    ax = plt.subplot2grid(shape=(2, 5), loc=(0,4), rowspan=2, colspan = 1)
-    ax.plot(corrDir[:,0], angleArray, color = 'b', label = 'position')
-    ax.plot(corrDir[:,1], angleArray, color = 'orange',  label = 'direction')
-    ax.plot(mixedCorrelation, angleArray, color = 'k',  label = 'mixed')
-
-    ax.plot([0,1], [posAngle,posAngle], color = 'b', linestyle= '--')
-    ax.plot([0,1], [dirAngle,dirAngle], color = 'orange', linestyle= '--')
-    ax.set_yticks([0, np.pi/4, np.pi/2, 3*np.pi/4, np.pi])
-    ax.set_ylabel('Angle of projection')
-    ax.set_xlabel('Correlation Coefficient')
-    ax.set_title(f"{mixedCorrelation[bestAngleIdx]:2f}")
-    ax.legend()
-    plt.suptitle(f"{mouse} - Eccentricity: {eccentricity:4f}")
-    plt.tight_layout()
-
     plt.savefig(os.path.join(saveDir,f'{mouse}_ellipse_fit.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
     plt.savefig(os.path.join(saveDir,f'{mouse}_ellipse_fit.svg'), dpi = 400,bbox_inches="tight",transparent=True)
 
-    plt.close(fig)
-
 
 #__________________________________________________________________________
 #|                                                                        |#
-#|                                DECODERS                                |#
+#|                             ECCENTRICITY                               |#
 #|________________________________________________________________________|#
 
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-saveDir = '/home/julio/Documents/SP_project/Fig2/decoders/'
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+dataDir =  '/home/julio/Documents/SP_project/Fig2/ellipse/'
+ellipseDict = load_pickle(dataDir, 'ellipse_fit_dict.pkl')
 
-params = {
-    'x_base_signal': 'clean_traces',
-    'y_signal_list': ['posx', 'posy','vel', 'index_mat', 'dir_mat'],
-    'verbose': True,
-    'trial_signal': 'index_mat',
-    'nn': 120,
-    'min_dist':0.1,
-    'n_splits': 10,
-    'n_dims': 3,
-    'emb_list': ['pca', 'isomap', 'umap']
-    }
-
-dec_R2s = dict()
-dec_pred = dict()
+eccenList = list()
+mouseList = list()
+layerList = list()
 for mouse in miceList:
-    print(f'\n{mouse}: ')
-    fileName =  mouse+'_df_dict.pkl'
-    filePath = os.path.join(dataDir, mouse)
-    pdMouse = gu.load_files(filePath,'*'+fileName,verbose=True,struct_type="pickle")
-    dec_R2s[mouse], dec_pred[mouse] = dec.decoders_1D(pd_object = copy.deepcopy(pdMouse), **params)
+    eccenList.append(ellipseDict[mouse]['eccentricity'])
+    mouseList.append(mouse)
+    if mouse in deepMice:
+        layerList.append('deep')
+    elif mouse in supMice:
+        layerList.append('sup')
 
-    with open(os.path.join(saveDir,'dec_R2s_dict.pkl'), 'wb') as f:
-        pickle.dump(dec_R2s, f)
-    with open(os.path.join(saveDir,'dec_pred_dict.pkl'), 'wb') as f:
-        pickle.dump(dec_pred, f)
-    with open(os.path.join(saveDir,'dec_params.pkl'), 'wb') as f:
-        pickle.dump(params, f)
+fig, ax = plt.subplots(1, 1, figsize=(6,6))
+palette= ["#32e653", "#E632C5"]
+eccenPD = pd.DataFrame(data={'mouse': mouseList,
+                     'eccentricity': eccenList,
+                     'layer': layerList})    
 
+b = sns.barplot(x='layer', y='eccentricity', data=eccenPD,
+            palette = palette, linewidth = 1, width= .5, ax = ax)
+sns.swarmplot(x='layer', y='eccentricity', data=eccenPD,
+        palette = 'dark:gray', edgecolor = 'gray', ax = ax)
 
-
-#__________________________________________________________________________
-#|                                                                        |#
-#|                            SHIFTED DECODERS                            |#
-#|________________________________________________________________________|#
-
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-saveDir = '/home/julio/Documents/SP_project/Fig2/decoders/'
-
-params = {
-    'x_base_signal': 'clean_traces',
-    'y_signal_list': ['posx'],
-    'verbose': True,
-    'trial_signal': 'index_mat',
-    'nn': 120,
-    'min_dist':0.1,
-    'n_splits': 100,
-    'n_dims': 3,
-    'emb_list': ['umap']
-    }
-
-dec_R2s = dict()
-dec_pred = dict()
-for mouse in miceList:
-    print(f'\n{mouse}: ')
-    fileName =  mouse+'_df_dict.pkl'
-    filePath = os.path.join(dataDir, mouse)
-    pdMouse = gu.load_files(filePath,'*'+fileName,verbose=True,struct_type="pickle")
-    dec_R2s[mouse], dec_pred[mouse] = dec.decoders_1D_shifted(pd_object = copy.deepcopy(pdMouse), **params)
-
-    with open(os.path.join(saveDir,'dec_R2s_dict_shifted_v2.pkl'), 'wb') as f:
-        pickle.dump(dec_R2s, f)
-    with open(os.path.join(saveDir,'dec_pred_dict_shifted_v2.pkl'), 'wb') as f:
-        pickle.dump(dec_pred, f)
-    with open(os.path.join(saveDir,'dec_params_shifted_v2.pkl'), 'wb') as f:
-        pickle.dump(params, f)
+print('eccentricity:', stats.ttest_ind(eccenList[:5], eccenList[5:], equal_var=True))
+plt.savefig(os.path.join(dataDir,'DeepSup_eccentricity.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(dataDir,'DeepSup_eccentricity.png'), dpi = 400,bbox_inches="tight")
 
 
 
@@ -1290,10 +1508,12 @@ for mouse in miceList:
 #|                                                                        |#
 #|                              PLACE CELLS                               |#
 #|________________________________________________________________________|#
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+from neural_manifold import place_cells as pc
 
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-saveDir = '/home/julio/Documents/SP_project/Fig2/place_cells/'
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+dataDir = '/home/julio/Documents/SP_project/Fig2_edges/processed_data/'
+saveDir = '/home/julio/Documents/SP_project/Fig2_edges/place_cells/'
 
 params = {
     'sF': 20,
@@ -1301,10 +1521,10 @@ params = {
     'std_pos': 0,
     'std_pdf': 5,
     'method': 'spatial_info',
-    'num_shuffles': 1000,
+    'num_shuffles': 100,
     'min_shift': 10,
     'th_metric': 99,
-    'ignore_edges':5
+    'ignore_edges':10
     }
 
 for mouse in miceList:
@@ -1339,6 +1559,7 @@ for mouse in miceList:
     with open(os.path.join(saveDir,mouse+'_pc_dict.pkl'), 'wb') as f:
         pickle.dump(mousePC, f)
 
+
 #__________________________________________________________________________
 #|                                                                        |#
 #|                           MANIFOLD ACTIVITY                            |#
@@ -1347,11 +1568,11 @@ for mouse in miceList:
 supMice = ['CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4']
 
-dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
-placeDir = '/home/julio/Documents/SP_project/Fig2/place_cells/'
-saveDir = '/home/julio/Documents/SP_project/Fig2/manifold_cells'
+dataDir = '/home/julio/Documents/SP_project/Fig2_edges/processed_data/'
+placeDir = '/home/julio/Documents/SP_project/Fig2_edges/place_cells/'
+saveDir = '/home/julio/Documents/SP_project/Fig2_edges/manifold_cells'
 
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 
 for mouse in miceList:
     fileName =  mouse+'_df_dict.pkl'
@@ -1457,142 +1678,208 @@ for mouse in miceList:
     plt.savefig(os.path.join(saveDir,mouse+'_manifoldCells_histogram.png'), dpi = 400,bbox_inches="tight")
 
 
+#__________________________________________________________________________
+#|                                                                        |#
+#|                           MANIFOLD ACTIVITY                            |#
+#|________________________________________________________________________|#
 
+supMice = ['CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4']
+
+dataDir = '/home/julio/Documents/SP_project/Fig2_edges/processed_data/'
+placeDir = '/home/julio/Documents/SP_project/Fig2_edges/place_cells/'
+saveDir = '/home/julio/Documents/SP_project/Fig2_edges/manifold_cells'
+
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+for mouse in miceList:
+    fileName =  mouse+'_df_dict.pkl'
+    filePath = os.path.join(dataDir, mouse)
+    pdMouse = load_pickle(filePath,fileName)
+
+    signal = copy.deepcopy(np.concatenate(pdMouse['clean_traces'].values, axis = 0))
+    pos = copy.deepcopy(np.concatenate(pdMouse['pos'].values, axis = 0))
+    direction = copy.deepcopy(np.concatenate(pdMouse['dir_mat'].values, axis = 0))
+    emb = copy.deepcopy(np.concatenate(pdMouse['umap'].values, axis = 0))
+
+    #load place cells
+    pcDict = load_pickle(placeDir, mouse+'_pc_dict.pkl')
+    neuPDF = pcDict['neu_pdf']
+    normNeuPDF = np.zeros(neuPDF.shape)
+    nCells = neuPDF.shape[1]
+    for d in range(neuPDF.shape[2]):
+        for c in range(nCells):
+            normNeuPDF[:,c,d] = neuPDF[:,c,d]/np.max(neuPDF[:,c,d])
+    orderLeft =  np.argsort(np.argmax(neuPDF[:,:,0], axis=0))
+    orderRight =  np.argsort(np.argmax(neuPDF[:,:,1], axis=0))
+
+    
+    neuPDF = normNeuPDF
+    meanNormNeuPDF = np.nanmean(np.concatenate((neuPDF[:, pcDict['place_cells_dir'][:,0],0],neuPDF[:, pcDict['place_cells_dir'][:,1],1]),axis=1),axis=1)
+    mNeuPDFLeft = np.nanmean(neuPDF[:, pcDict['place_cells_dir'][:,0],0], axis=1)
+    mNeuPDFRight = np.nanmean(neuPDF[:, pcDict['place_cells_dir'][:,1],1], axis=1)
+
+    mapAxis = pcDict['mapAxis']
+    manifoldSignal = np.zeros((emb.shape[0]))*np.nan
+    for p in range(emb.shape[0]):
+        try:
+            x = np.where(mapAxis[0]<=pos[p,0])[0][-1]
+        except: 
+            x = 0
+        dire = direction[p]
+        if dire==0:
+            manifoldSignal[p] = np.nan
+        elif dire==1:
+            manifoldSignal[p] = mNeuPDFLeft[x]
+        elif dire==2:
+            manifoldSignal[p] = mNeuPDFRight[x]
+
+    fig = plt.figure(figsize=(8,12))
+    ax = plt.subplot(2,2,1)
+    ax.matshow(normNeuPDF[:,orderLeft,0].T, aspect = 'auto')
+    histSignalLeft = nCells - 0.5*nCells*(mNeuPDFLeft/np.max(mNeuPDFLeft))
+    ax.plot(histSignalLeft, color = 'white', linewidth = 5)
+    ax.set_title('izq')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+
+    ax = plt.subplot(2,2,2)
+    ax.matshow(normNeuPDF[:,orderRight,1].T, aspect = 'auto')
+    histSignalRight = nCells - 0.5*nCells*(mNeuPDFRight/np.max(mNeuPDFRight))
+    ax.plot(histSignalRight, color = 'white', linewidth = 3)
+    ax.set_title('dcha')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+
+    ax = plt.subplot(2,2,3, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = pos[:,0],s = 30, cmap = 'inferno')
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+
+    ax = plt.subplot(2,2,4, projection = '3d')
+    b = ax.scatter(*emb[:,:3].T, c = manifoldSignal,s = 30)
+    cbar = fig.colorbar(b, ax=ax, location='right',anchor=(0, 0.3), shrink=0.8)
+    ax.set_xlabel('Dim 1', labelpad = -8)
+    ax.set_ylabel('Dim 2', labelpad = -8)
+    ax.set_zlabel('Dim 3', labelpad = -8)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    plt.tight_layout()
+    fig.suptitle(mouse)
+    plt.savefig(os.path.join(saveDir,mouse+'_manifoldCells_onlyPC.svg'), dpi = 400,bbox_inches="tight")
+    plt.savefig(os.path.join(saveDir,mouse+'_manifoldCells_onlyPC.png'), dpi = 400,bbox_inches="tight")
+
+
+    fig = plt.figure(figsize=(8,12))
+    ax = plt.subplot(2,2,1)
+    ax.matshow(normNeuPDF[:,orderLeft,0].T, aspect = 'auto')
+    histSignalLeft = nCells - 0.5*nCells*(mNeuPDFLeft/np.max(mNeuPDFLeft))
+    ax.plot(histSignalLeft, color = 'white', linewidth = 5)
+    ax.set_title('izq')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+
+    ax = plt.subplot(2,2,2)
+    ax.matshow(normNeuPDF[:,orderRight,1].T, aspect = 'auto')
+    histSignalRight = nCells - 0.5*nCells*(mNeuPDFRight/np.max(mNeuPDFRight))
+    ax.plot(histSignalRight, color = 'white', linewidth = 3)
+    ax.set_title('dcha')
+    ax.set_ylabel('cell number')
+    ax.set_xlabel('pos-x')
+
+    histSignal =meanNormNeuPDF
+    ax = plt.subplot(2,1,2)
+    ax.plot(mapAxis[0][:,0], histSignal, linewidth=2)
+    ax.set_xlabel('pos-x')
+    ax.set_ylabel('histogram')
+    plt.tight_layout()
+    fig.suptitle(mouse)
+    plt.savefig(os.path.join(saveDir,mouse+'_manifoldCells_histogram_onlyPC.svg'), dpi = 400,bbox_inches="tight")
+    plt.savefig(os.path.join(saveDir,mouse+'_manifoldCells_histogram_onlyPC.png'), dpi = 400,bbox_inches="tight")
 
 
 
 #__________________________________________________________________________
 #|                                                                        |#
-#|                          COMPUTE INFORMATION                           |#
+#|                           MANIFOLD ACTIVITY                            |#
 #|________________________________________________________________________|#
 
-from sklearn.feature_selection import mutual_info_regression
+supMice = ['CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4']
+izq = ['GC2', 'GC3', 'CZ3']
 
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+dataDir = '/home/julio/Documents/SP_project/Fig2_edges/processed_data/'
+placeDir = '/home/julio/Documents/SP_project/Fig2_edges/place_cells/'
+saveDir = '/home/julio/Documents/SP_project/Fig2_edges/manifold_cells'
 
-data_dir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
-save_dir = '/home/julio/Documents/SP_project/Fig2/mutual_info/'
-mi_scores = {}
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+fig = plt.figure(figsize=(8,12))
+ax1 = plt.subplot(1,2,1)
+ax2 = plt.subplot(1,2,2)
+
+deepMat = np.zeros((40,5))*np.nan
+deepMapAxis =  np.zeros((40,5))*np.nan
+supMat = np.zeros((40,5))*np.nan
+supMapAxis =  np.zeros((40,5))*np.nan
+
+deepCount = 0
+supCount = 0
 for mouse in miceList:
-    print(f"\nWorking on mouse {mouse}: ")
-    file_path = os.path.join(data_dir, mouse)
-    pd_mouse = load_pickle(file_path,mouse+'_df_dict.pkl')
-    mi_scores[mouse] = {
-        'label_order': ['posx','posy','dir','vel','time']
-    }
-    #signal
-    signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)
-    pos = copy.deepcopy(np.concatenate(pd_mouse['pos'].values, axis=0))
-    dir_mat = copy.deepcopy(np.concatenate(pd_mouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pd_mouse['vel'].values, axis=0)).reshape(-1,1)
-    trial = copy.deepcopy(np.concatenate(pd_mouse['index_mat'].values, axis=0))
-    time = np.arange(pos.shape[0]).reshape(-1,1)
-    x = np.concatenate((pos,dir_mat, vel, time),axis=1)
-    mi_regression = np.zeros((x.shape[1], signal.shape[1]))*np.nan
-    for cell in range(signal.shape[1]):
-        mi_regression[:, cell] = mutual_info_regression(x, signal[:,cell], n_neighbors = 50, random_state = 16)
-    mi_scores[mouse]['mi_scores'] = copy.deepcopy(mi_regression)
+    fileName =  mouse+'_df_dict.pkl'
+    filePath = os.path.join(dataDir, mouse)
+    pdMouse = load_pickle(filePath,fileName)
+    
+    signal = copy.deepcopy(np.concatenate(pdMouse['clean_traces'].values, axis = 0))
+    pos = copy.deepcopy(np.concatenate(pdMouse['pos'].values, axis = 0))
+    direction = copy.deepcopy(np.concatenate(pdMouse['dir_mat'].values, axis = 0))
+    emb = copy.deepcopy(np.concatenate(pdMouse['umap'].values, axis = 0))
 
-    save_file = open(os.path.join(save_dir, 'mi_scores_sep_dict.pkl'), "wb")
-    pickle.dump(mi_scores, save_file)
-    save_file.close()
+    #load place cells
+    pcDict = load_pickle(placeDir, mouse+'_pc_dict.pkl')#[fnamePre]
+    neuPDF = pcDict['neu_pdf']
+    mapAxis = pcDict['mapAxis']
+    normNeuPDF = np.zeros(neuPDF.shape)
+    nCells = neuPDF.shape[1]
+    for d in range(neuPDF.shape[2]):
+        for c in range(nCells):
+            normNeuPDF[:,c,d] = neuPDF[:,c,d]/np.max(neuPDF[:,c,d])
+    meanNormNeuPDF = np.nanmean(np.squeeze(normNeuPDF.reshape(normNeuPDF.shape[0],-1,1)),axis=1)
+    if mouse in izq:
+        meanNormNeuPDF = np.flipud(meanNormNeuPDF)
+    if mouse in deepMice:
+        ax1.plot(mapAxis[0][:,0],meanNormNeuPDF, label=mouse)
+        deepMat[:meanNormNeuPDF.shape[0], deepCount] = meanNormNeuPDF
+        deepMapAxis[:meanNormNeuPDF.shape[0], deepCount] = mapAxis[0][:,0]
+        deepCount+=1
+    elif mouse in supMice:
+        ax2.plot(mapAxis[0][:,0],meanNormNeuPDF, label=mouse)
+        supMat[:meanNormNeuPDF.shape[0], supCount] = meanNormNeuPDF
+        supMapAxis[:meanNormNeuPDF.shape[0], supCount] = mapAxis[0][:,0]
+        supCount+=1
 
+ax1.set_xlabel('pos-x')
+ax1.set_ylabel('histogram')
+ax2.set_xlabel('pos-x')
+ax2.set_ylabel('histogram')
+ax1.set_title('Deep')
+ax2.set_title('Sup')
+plt.tight_layout()
 
-#compute shifted percentile
-data_dir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
-save_dir = '/home/julio/Documents/SP_project/Fig2/mutual_info/'
-mi_scores = {}
-num_iter = 100
+fig = plt.figure(figsize=(8,12))
+ax = plt.subplot(1,1,1)
+m = np.nanmean(deepMat,axis=1)
+sd = np.nanstd(deepMat,axis=1)
+ax.plot(np.nanmean(deepMapAxis,axis=1),m, label = 'deep')
+ax.fill_between(np.nanmean(deepMapAxis,axis=1), m-sd, m+sd, alpha = 0.3)
 
-for mouse in miceList:
-    print(f"\nWorking on mouse {mouse}: ")
-    file_path = os.path.join(data_dir, mouse)
-    pd_mouse = load_pickle(file_path,mouse+'_df_dict.pkl')
-    mi_scores[mouse] = {
-        'label_order': ['posx','posy','dir','vel','time']
-    }
-    #signal
-    signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)
-    pos = copy.deepcopy(np.concatenate(pd_mouse['pos'].values, axis=0))
-    dir_mat = copy.deepcopy(np.concatenate(pd_mouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pd_mouse['vel'].values, axis=0)).reshape(-1,1)
-    trial = copy.deepcopy(np.concatenate(pd_mouse['index_mat'].values, axis=0))
-    time = np.arange(pos.shape[0]).reshape(-1,1)
-    x = np.concatenate((pos,dir_mat, vel, time),axis=1)
-    mi_regression = np.zeros((x.shape[1], signal.shape[1],num_iter))*np.nan
-    time_shift = np.random.randint(200, x.shape[0] - 200, num_iter)
-    for cell in range(signal.shape[1]):
-        for it, shift in enumerate(time_shift):
-            shifted_x = np.zeros(x.shape)
-            shifted_x[:-shift,:] = copy.deepcopy(x[shift:,:])
-            shifted_x[-shift:,:] = copy.deepcopy(x[:shift,:])
-            mi_regression[:, cell,it] = mutual_info_regression(shifted_x, signal[:,cell], n_neighbors = 50, random_state = 16)
-
-    mi_scores[mouse]['mi_scores'] = copy.deepcopy(mi_regression)
-
-    save_file = open(os.path.join(save_dir, 'mi_scores_shuffled_dict.pkl'), "wb")
-    pickle.dump(mi_scores, save_file)
-    save_file.close()
-
-#compute shifted percentile
-data_dir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
-save_dir = '/home/julio/Documents/SP_project/Fig2/mutual_info/'
-mi_scores = {}
-num_iter = 100
-for mouse in miceList:
-    print(f"\nWorking on mouse {mouse}: ")
-    file_path = os.path.join(data_dir, mouse)
-    pd_mouse = load_pickle(file_path,mouse+'_df_dict.pkl')
-    mi_scores[mouse] = {
-        'label_order': ['posx','posy','dir','vel','time']
-    }
-    #signal
-    signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)
-    pos = copy.deepcopy(np.concatenate(pd_mouse['pos'].values, axis=0))
-    dir_mat = copy.deepcopy(np.concatenate(pd_mouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pd_mouse['vel'].values, axis=0)).reshape(-1,1)
-    trial = copy.deepcopy(np.concatenate(pd_mouse['index_mat'].values, axis=0))
-    time = np.arange(pos.shape[0]).reshape(-1,1)
-    x = np.concatenate((pos,dir_mat, vel, time),axis=1)
-    mi_regression = np.zeros((x.shape[1], signal.shape[1],num_iter))*np.nan
-    time_shift = np.random.randint(200, x.shape[0] - 200, num_iter)
-    for cell in range(signal.shape[1]):
-        for it in range(num_iter):
-            idx = np.arange(x.shape[0]).astype(int)
-            np.random.shuffle(idx)
-            random_x = x[idx,:]
-            mi_regression[:, cell,it] = mutual_info_regression(random_x, signal[:,cell], n_neighbors = 50, random_state = 16)
-
-    mi_scores[mouse]['mi_scores'] = copy.deepcopy(mi_regression)
-    save_file = open(os.path.join(save_dir, 'mi_scores_random_dict.pkl'), "wb")
-    pickle.dump(mi_scores, save_file)
-    save_file.close()
-#__________________________________________________________________________
-#|                                                                        |#
-#|                               FIRING RATES                             |#
-#|________________________________________________________________________|#
-
-
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-
-data_dir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
-save_dir = '/home/julio/Documents/SP_project/Fig2/firing_rates/'
-firing_rates = {}
-for mouse in miceList:
-    print(f"\nWorking on mouse {mouse}: ")
-    file_path = os.path.join(data_dir, mouse)
-    pd_mouse = load_pickle(file_path,mouse+'_df_dict.pkl')
-    #signal
-    signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)
-
-    num_cells = signal.shape[1]
-    time_duration = signal.shape[0]/20
-    firing_rates[mouse] = np.zeros((num_cells,))*np.nan;
-    for cell in range(num_cells):
-        peaks,_ =find_peaks(signal[:,cell])
-        firing_rates[mouse][cell] = len(peaks)/time_duration
-    save_file = open(os.path.join(save_dir, 'firing_rates_dict.pkl'), "wb")
-    pickle.dump(firing_rates, save_file)
-    save_file.close()
-
-
+m = np.nanmean(supMat,axis=1)
+sd = np.nanstd(supMat,axis=1)
+ax.plot(np.nanmean(supMapAxis,axis=1),m, label = 'sup')
+ax.fill_between(np.nanmean(supMapAxis,axis=1), m-sd, m+sd, alpha = 0.3)
+ax.legend()

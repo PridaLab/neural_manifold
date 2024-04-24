@@ -293,6 +293,10 @@ function [tracesEvents] = get_tracesEvents(files,accepted_to_global_guide, condi
                 tracesEvents.frame = temp.(field_temp{field,1});
             elseif contains(field_temp{field,1}, 'scale', 'IgnoreCase', true)
                 tracesEvents.pixel_scale = temp.(field_temp{field,1});
+                if tracesEvents.pixel_scale==0
+                    tracesEvents.pixel_scale = 0.0702;
+                    warning('position scale was 0. Setting it to default: 0.0702')
+                end
             end
         end
     end

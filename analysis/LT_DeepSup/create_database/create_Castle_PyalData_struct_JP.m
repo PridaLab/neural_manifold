@@ -2,6 +2,7 @@
 close all; clear; clc;
 %% FILE
 data_file =  'GC2_alo_events_s3.mat';
+
 % Load file
 load(data_file);
 %% DEFINE MAZE SECTIONS

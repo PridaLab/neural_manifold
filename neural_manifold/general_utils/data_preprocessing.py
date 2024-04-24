@@ -11,76 +11,6 @@ import scipy.signal as scs
 from scipy.ndimage import convolve1d
 import warnings
 
-#Adapted from PyalData (19/10/21) (add lower case, and continuous option)
-def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous = False, num_std = 5, assymetry = False):
-    """
-    Add firing rate fields calculated from spikes fields
-
-    Parameters
-    ----------
-    trial_data : pd.DataFrame
-        trial_data dataframe
-    method : str
-        'bin' or 'smooth'
-    std : float (optional)
-        standard deviation of the Gaussian window to smooth with
-        default 0.05 seconds
-    hw : float (optional)
-        half-width of the of the Gaussian window to smooth with
-    win : 1D array
-        smoothing window
-
-    Returns
-    -------
-    td : pd.DataFrame
-        trial_data with '_rates' fields added
-    """
-    out_frame = copy.deepcopy(data_frame)
-    spike_fields = [name for name in out_frame.columns.values if (name.lower().__contains__("spikes") or name.lower().__contains__("events"))]
-    rate_fields = [name.replace("spikes", "rates").replace("events", "revents") for name in spike_fields]
-    columns_name = [col for col in out_frame.columns.values]
-    lower_columns_name = [col.lower() for col in out_frame.columns.values]
-    if 'bin_size' in lower_columns_name:
-        bin_size = out_frame.iloc[0][columns_name[lower_columns_name.index("bin_size")]]
-    elif 'fs' in lower_columns_name:
-        bin_size = 1/out_frame.iloc[0][columns_name[lower_columns_name.index("fs")]]
-    elif 'sf' in lower_columns_name:
-        bin_size = 1/out_frame.iloc[0][columns_name[lower_columns_name.index("sf")]]
-    else:
-        raise ValueError('Dataframe does not contain binsize, sf, or fs field.')
-        
-    assert sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw or std"
-    if method == "smooth":
-        if win is None:
-            if hw is not None:
-                std = hw_to_std(hw)
-                
-            win = norm_gauss_window(bin_size, std, num_std = num_std, assymetry = assymetry)
-            
-        def get_rate(spikes):
-            return smooth_data(spikes, win=win)/bin_size
-
-    elif method == "bin":
-        assert all([x is None for x in [std, hw, win]]), "If binning is used, then std, hw, and win have no effect, so don't provide them."
-        def get_rate(spikes):
-            return spikes/bin_size
-    # calculate rates for every spike field
-    if not continuous:
-        for (spike_field, rate_field) in zip(spike_fields, rate_fields):
-            out_frame[rate_field] = [get_rate(spikes) for spikes in out_frame[spike_field]]
-    else:
-        out_frame["index_mat"] = [np.zeros((out_frame[spike_fields[0]][idx].shape[0],1))+out_frame["trial_id"][idx] 
-                                  for idx in range(out_frame.shape[0])]
-        index_mat = np.concatenate(out_frame["index_mat"].values, axis=0)
-        
-        for (spike_field, rate_field) in zip(spike_fields, rate_fields):
-            spikes = np.concatenate(out_frame[spike_field], axis = 0)
-            rates = get_rate(spikes)
-            out_frame[rate_field] = [rates[index_mat[:,0]==out_frame["trial_id"][idx] ,:] 
-                                                                for idx in range(out_frame.shape[0])]
-    return out_frame
-
-
 #Adapted from PyalData package (19/10/21) (added assymetry, and variable win_length)
 def norm_gauss_window(bin_size, std, num_std = 5, assymetry = False):
     """
@@ -198,61 +128,8 @@ def select_trials(trial_data, query, reset_index=True):
         return trial_data.loc[trials_to_keep, :].reset_index(drop=True)
     else:
         return trial_data.loc[trials_to_keep, :]
-    
-    
-def remove_low_firing_neurons(trial_data, signal, threshold=None, divide_by_bin_size=None, verbose=False, mask= None):
-    """
-    Remove neurons from signal whose average firing rate
-    across all trials is lower than a threshold
-    
-    Parameters
-    ----------
-    trial_data : pd.DataFrame
-        data in trial_data format
-    signal : str
-        signal from which to calculate the average firing rates
-        ideally spikes or rates
-    threshold : float
-        threshold in Hz
-    divide_by_bin_size : bool, optional
-        whether to divide by the bin size when calculating the firing rates
-    verbose : bool, optional, default False
-        print a message about how many neurons were removed
-
-    Returns
-    -------
-    trial_data with the low-firing neurons removed from the
-    signal and the corresponding unit_guide
-    """
-
-    if not np.any(mask):
-        av_rates = np.mean(np.concatenate(trial_data[signal].values, axis=0), axis=0)
-        if divide_by_bin_size:
-            av_rates = av_rates/trial_data.bin_size[0]
-        mask = av_rates >= threshold
-        
-    neuronal_fields = _get_neuronal_fields(trial_data, ref_field= signal)
-    for nfield in neuronal_fields:
-        trial_data[nfield] = [arr[:, mask] for arr in trial_data[nfield]]
-    
-    if signal.endswith("_spikes"):
-        suffix = "_spikes"
-        unit_guide = signal[:-len(suffix)] + "_unit_guide"
-
-    elif signal.endswith("_rates"):
-        suffix = "_rates"
-        unit_guide = signal[:-len(suffix)] + "_unit_guide"
-    else:
-        warnings.warn("Could not determine which unit_guide to modify.")
-        unit_guide = None
-    if unit_guide in trial_data.columns:
-        trial_data[unit_guide] = [arr[mask, :] for arr in trial_data[unit_guide]]
-    if verbose:
-        print(f"Removed {np.sum(~mask)} neurons from {signal}.")
-    return trial_data
   
-    
-def _get_neuronal_fields(trial_data, ref_field=None):
+def get_neuronal_fields(trial_data, ref_field=None):
     """
     Identify time-varying fields in the dataset
     
@@ -273,7 +150,7 @@ def _get_neuronal_fields(trial_data, ref_field=None):
     if ref_field is None:
         # look for a spikes field
         ref_field = [col for col in trial_data.columns.values
-                     if col.endswith("spikes") or col.endswith("rates")][0]
+                     if col.endswith("spikes") or col.endswith("rates") or col.endswith("traces")][0]
 
     # identify candidates based on the first trial
     first_trial = trial_data.iloc[0]
@@ -315,7 +192,7 @@ def get_temporal_fields(trial_data, ref_field=None):
     if ref_field is None:
         # look for a spikes field
         ref_field = [col for col in trial_data.columns.values
-                     if col.endswith("pos") or col.endswith("vel")][0]
+                     if 'pos' in col or 'traces' in col][0]
 
     # identify candidates based on the first trial
     first_trial = trial_data.iloc[0]
@@ -337,38 +214,174 @@ def get_temporal_fields(trial_data, ref_field=None):
     return temporal_fields
 
 def keep_only_moving(pd_struct, vel_th):
+    columns_name = [col for col in pd_struct.columns.values]
+    lower_columns_name = [col.lower() for col in pd_struct.columns.values]
 
-    if 'sF' in pd_struct.columns:
-        sF = pd_struct['sF'][0]
-    elif 'Fs' in pd_struct.columns:
-        sF = pd_struct['Fs'][0]
+    if 'bin_size' in lower_columns_name:
+        sf = 1/pd_struct.iloc[0][columns_name[lower_columns_name.index("bin_size")]]
+    elif 'fs' in lower_columns_name:
+        sf = pd_struct.iloc[0][columns_name[lower_columns_name.index("fs")]]
+    elif 'sf' in lower_columns_name:
+        sf = pd_struct.iloc[0][columns_name[lower_columns_name.index("sf")]]
     else:
-        assert True, "must provide sF"
+        assert True, "must provide sf"
 
-    if 'index_mat' not in pd_struct:
-        pd_struct["index_mat"] = [np.zeros((pd_struct["pos"][idx].shape[0],1))+
+
+    if 'trial_id_mat' not in pd_struct:
+        pd_struct["trial_id_mat"] = [np.zeros((pd_struct["position"][idx].shape[0],1))+
                                     pd_struct["trial_id"][idx] for idx in pd_struct.index]
-    trial_idx = copy.deepcopy(np.concatenate(pd_struct['index_mat'].values, axis=0))
+    trial_id_mat = copy.deepcopy(np.concatenate(pd_struct['trial_id_mat'].values, axis=0)).reshape(-1,)
 
-    if 'vel' not in pd_struct:
-        pos = copy.deepcopy(np.concatenate(pd_struct['pos'].values, axis=0))
-        vel = np.linalg.norm(np.diff(pos, axis= 0), axis=1)*sF
-        vel = np.hstack((vel[0], vel))
-        pd_struct['vel'] = [vel[trial_idx[:,0]==pd_struct["trial_id"][idx]] 
+    if 'speed' not in pd_struct:
+        position = copy.deepcopy(np.concatenate(pd_struct['position'].values, axis=0))
+        speed = np.linalg.norm(np.diff(position, axis= 0), axis=1)*sf
+        speed = np.hstack((speed[0], speed))
+        pd_struct['speed'] = [speed[trial_id_mat==pd_struct["trial_id"][idx]] 
                                                             for idx in pd_struct.index]
 
     temporal_fields = get_temporal_fields(pd_struct)
-    temporal_fields.remove('vel')
+    temporal_fields.remove('speed')
     move_struct = copy.deepcopy(pd_struct)
     still_struct = copy.deepcopy(pd_struct)
     for field in temporal_fields:
-        move_struct[field] = [pd_struct[field][idx][pd_struct['vel'][idx]>=vel_th]
+        move_struct[field] = [pd_struct[field][idx][pd_struct['speed'][idx]>=vel_th]
                                                             for idx in pd_struct.index]
-        still_struct[field] = [pd_struct[field][idx][pd_struct['vel'][idx]<vel_th]
+        still_struct[field] = [pd_struct[field][idx][pd_struct['speed'][idx]<vel_th]
                                                             for idx in pd_struct.index]
-    move_struct['vel'] = [pd_struct['vel'][idx][pd_struct['vel'][idx]>=vel_th]
+    move_struct['speed'] = [pd_struct['speed'][idx][pd_struct['speed'][idx]>=vel_th]
                                                             for idx in pd_struct.index]
-    still_struct['vel'] = [pd_struct['vel'][idx][pd_struct['vel'][idx]<vel_th]
+    still_struct['speed'] = [pd_struct['speed'][idx][pd_struct['speed'][idx]<vel_th]
                                                             for idx in pd_struct.index]
                                                             
     return move_struct, still_struct
+
+
+
+
+
+
+
+
+########################## OLD #########################
+
+#Adapted from PyalData (19/10/21) (add lower case, and continuous option)
+def add_firing_rates(data_frame, method, std=None, hw=None, win=None, continuous = False, num_std = 5, assymetry = False):
+    """
+    Add firing rate fields calculated from spikes fields
+
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        trial_data dataframe
+    method : str
+        'bin' or 'smooth'
+    std : float (optional)
+        standard deviation of the Gaussian window to smooth with
+        default 0.05 seconds
+    hw : float (optional)
+        half-width of the of the Gaussian window to smooth with
+    win : 1D array
+        smoothing window
+
+    Returns
+    -------
+    td : pd.DataFrame
+        trial_data with '_rates' fields added
+    """
+    out_frame = copy.deepcopy(data_frame)
+    spike_fields = [name for name in out_frame.columns.values if (name.lower().__contains__("spikes") or name.lower().__contains__("events"))]
+    rate_fields = [name.replace("spikes", "rates").replace("events", "revents") for name in spike_fields]
+    columns_name = [col for col in out_frame.columns.values]
+    lower_columns_name = [col.lower() for col in out_frame.columns.values]
+    if 'bin_size' in lower_columns_name:
+        bin_size = out_frame.iloc[0][columns_name[lower_columns_name.index("bin_size")]]
+    elif 'fs' in lower_columns_name:
+        bin_size = 1/out_frame.iloc[0][columns_name[lower_columns_name.index("fs")]]
+    elif 'sf' in lower_columns_name:
+        bin_size = 1/out_frame.iloc[0][columns_name[lower_columns_name.index("sf")]]
+    else:
+        raise ValueError('Dataframe does not contain binsize, sf, or fs field.')
+        
+    assert sum([arg is not None for arg in [win, hw, std]]) == 1, "only give win, hw or std"
+    if method == "smooth":
+        if win is None:
+            if hw is not None:
+                std = hw_to_std(hw)
+                
+            win = norm_gauss_window(bin_size, std, num_std = num_std, assymetry = assymetry)
+            
+        def get_rate(spikes):
+            return smooth_data(spikes, win=win)/bin_size
+
+    elif method == "bin":
+        assert all([x is None for x in [std, hw, win]]), "If binning is used, then std, hw, and win have no effect, so don't provide them."
+        def get_rate(spikes):
+            return spikes/bin_size
+    # calculate rates for every spike field
+    if not continuous:
+        for (spike_field, rate_field) in zip(spike_fields, rate_fields):
+            out_frame[rate_field] = [get_rate(spikes) for spikes in out_frame[spike_field]]
+    else:
+        out_frame["trial_id_mat"] = [np.zeros((out_frame[spike_fields[0]][idx].shape[0],1))+out_frame["trial_id"][idx] 
+                                  for idx in range(out_frame.shape[0])]
+        trial_id_mat = np.concatenate(out_frame["trial_id_mat"].values, axis=0)
+        
+        for (spike_field, rate_field) in zip(spike_fields, rate_fields):
+            spikes = np.concatenate(out_frame[spike_field], axis = 0)
+            rates = get_rate(spikes)
+            out_frame[rate_field] = [rates[trial_id_mat[:,0]==out_frame["trial_id"][idx] ,:] 
+                                                                for idx in range(out_frame.shape[0])]
+    return out_frame
+
+
+
+def remove_low_firing_neurons(trial_data, signal, threshold=None, divide_by_bin_size=None, verbose=False, mask= None):
+    """
+    Remove neurons from signal whose average firing rate
+    across all trials is lower than a threshold
+    
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+    signal : str
+        signal from which to calculate the average firing rates
+        ideally spikes or rates
+    threshold : float
+        threshold in Hz
+    divide_by_bin_size : bool, optional
+        whether to divide by the bin size when calculating the firing rates
+    verbose : bool, optional, default False
+        print a message about how many neurons were removed
+
+    Returns
+    -------
+    trial_data with the low-firing neurons removed from the
+    signal and the corresponding unit_guide
+    """
+
+    if not np.any(mask):
+        av_rates = np.mean(np.concatenate(trial_data[signal].values, axis=0), axis=0)
+        if divide_by_bin_size:
+            av_rates = av_rates/trial_data.bin_size[0]
+        mask = av_rates >= threshold
+        
+    neuronal_fields = get_neuronal_fields(trial_data, ref_field= signal)
+    for nfield in neuronal_fields:
+        trial_data[nfield] = [arr[:, mask] for arr in trial_data[nfield]]
+    
+    if signal.endswith("_spikes"):
+        suffix = "_spikes"
+        unit_guide = signal[:-len(suffix)] + "_unit_guide"
+
+    elif signal.endswith("_rates"):
+        suffix = "_rates"
+        unit_guide = signal[:-len(suffix)] + "_unit_guide"
+    else:
+        warnings.warn("Could not determine which unit_guide to modify.")
+        unit_guide = None
+    if unit_guide in trial_data.columns:
+        trial_data[unit_guide] = [arr[mask, :] for arr in trial_data[unit_guide]]
+    if verbose:
+        print(f"Removed {np.sum(~mask)} neurons from {signal}.")
+    return trial_data

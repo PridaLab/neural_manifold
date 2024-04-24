@@ -168,7 +168,7 @@ miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9
 baseloadDir = '/home/julio/Documents/SP_project/LT_DeepSup/data/'
 basesaveDir = '/home/julio/Documents/SP_project/LT_DeepSup/processed_data/'
 signalField = 'raw_traces'
-velTh = 6
+velTh = 5
 sigma = 6
 sigUp = 4
 sigDown = 12
@@ -830,136 +830,6 @@ for mouse in miceList:
     with open(os.path.join(filePath, mouse+"_umap_object.pkl"), "wb") as file:
         pickle.dump(model, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-
-#__________________________________________________________________________
-#|                                                                        |#
-#|                       SAVE ONLY PRE DIM RED                            |#
-#|________________________________________________________________________|#
-
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
-params = {
-    'dim':3,
-    'nNeigh': 120,
-    'minDist': 0.1,
-    'signalName': 'clean_traces',
-}
-dataDir =  '/home/julio/Documents/SP_project/LT_DeepSup/processed_data/'
-
-for mouse in miceList:
-    dim_red_object = dict()
-    print(f"Working on mouse {mouse}: ")
-    fileName =  mouse+'_df_dict.pkl'
-    filePath = os.path.join(dataDir, mouse)
-    saveDirFig = os.path.join(filePath, 'figures')
-    animal = load_pickle(filePath,fileName)
-    fnames = list(animal.keys())
-    fnamePre = [fname for fname in fnames if 'lt' in fname][0]
-    animalPre= copy.deepcopy(animal[fnamePre])
-
-    signalPre = np.concatenate(animalPre[params['signalName']].values, axis = 0)
-    posPre = np.concatenate(animalPre['pos'].values, axis = 0)
-    dirMatPre = np.concatenate(animalPre['dir_mat'].values, axis=0)
-    timePre = np.arange(signalPre.shape[0])
-    indexMatPre = np.concatenate(animalPre['index_mat'].values, axis=0)
-
-    #umap
-    print("\tFitting umap model...", sep= '', end = '')
-    modelUmap = umap.UMAP(n_neighbors =params['nNeigh'], n_components =params['dim'], min_dist=params['minDist'])
-    modelUmap.fit(signalPre)
-    embPre = modelUmap.transform(signalPre)
-    embPre = embBoth[indexPreRot[:,0]==0,:]
-
-    #%%
-    fig = plt.figure()
-    ax = plt.subplot(1,3,1, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = dirMatPre, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    ax.scatter(*embRot[:,:3].T, c = dirMatRot, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    ax = plt.subplot(1,3,2, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = posPre[:,0], s= 30, cmap = 'magma')
-    ax.scatter(*embRot[:,:3].T, c = posRot[:,0], s= 30, cmap = 'magma')
-    ax = plt.subplot(1,3,3, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = timePre, cmap = 'Accent',s = 30)
-    ax.scatter(*embRot[:,:3].T, c = timePre, cmap = 'Accent',s = 30)
-    plt.suptitle(f"{mouse}: {params['signalName']} - nn: {params['nNeigh']} - dim: {params['dim']}")
-    plt.tight_layout()
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_umap.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_umap.svg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.close(fig)
-    animalPre['umap'] = [embPre[indexMatPre[:,0]==animalPre["trial_id"][idx] ,:] 
-                                   for idx in animalPre.index]
-    animalRot['umap'] = [embRot[indexMatRot[:,0]==animalRot["trial_id"][idx] ,:] 
-                                   for idx in animalRot.index]
-    dim_red_object['umap'] = copy.deepcopy(modelUmap)
-    print("\b\b\b: Done")
-
-    #isomap
-    print("\tFitting isomap model...", sep= '', end = '')
-    modelIsomap = Isomap(n_neighbors =params['nNeigh'], n_components = signalBoth.shape[1])
-    modelIsomap.fit(signalBoth)
-    embBoth = modelIsomap.transform(signalBoth)
-    embPre = embBoth[indexPreRot[:,0]==0,:]
-    embRot = embBoth[indexPreRot[:,0]==1,:]
-    #%%
-    fig = plt.figure()
-    ax = plt.subplot(1,3,1, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, color ='b', s= 30, cmap = 'magma')
-    ax.scatter(*embRot[:,:3].T, color = 'r', s= 30, cmap = 'magma')
-    ax = plt.subplot(1,3,2, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = posPre[:,0], s= 30, cmap = 'magma')
-    ax.scatter(*embRot[:,:3].T, c = posRot[:,0], s= 30, cmap = 'magma')
-    ax = plt.subplot(1,3,3, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = dirMatPre, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    ax.scatter(*embRot[:,:3].T, c = dirMatRot, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    plt.suptitle(f"{mouse}: {params['signalName']} - nn: {params['nNeigh']} - dim: {params['dim']}")
-    plt.tight_layout()
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_isomap.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_isomap.svg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.close(fig)
-    animalPre['isomap'] = [embPre[indexMatPre[:,0]==animalPre["trial_id"][idx] ,:] 
-                                   for idx in animalPre.index]
-    animalRot['isomap'] = [embRot[indexMatRot[:,0]==animalRot["trial_id"][idx] ,:] 
-                                   for idx in animalRot.index]
-    dim_red_object['isomap'] = copy.deepcopy(modelIsomap)
-    print("\b\b\b: Done")
-
-    #pca
-    print("\tFitting PCA model...", sep= '', end = '')
-    modelPCA = PCA(signalBoth.shape[1])
-    modelPCA.fit(signalBoth)
-    embBoth = modelPCA.transform(signalBoth)
-    embPre = embBoth[indexPreRot[:,0]==0,:]
-    embRot = embBoth[indexPreRot[:,0]==1,:]
-    #%%
-    fig = plt.figure()
-    ax = plt.subplot(1,3,1, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, color ='b', s= 30, cmap = 'magma')
-    ax.scatter(*embRot[:,:3].T, color = 'r', s= 30, cmap = 'magma')
-    ax = plt.subplot(1,3,2, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = posPre[:,0], s= 30, cmap = 'magma')
-    ax.scatter(*embRot[:,:3].T, c = posRot[:,0], s= 30, cmap = 'magma')
-    ax = plt.subplot(1,3,3, projection = '3d')
-    ax.scatter(*embPre[:,:3].T, c = dirMatPre, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    ax.scatter(*embRot[:,:3].T, c = dirMatRot, cmap = 'Accent',s = 30, vmin= 0, vmax = 8)
-    plt.suptitle(f"{mouse}: {params['signalName']} - nn: {params['nNeigh']} - dim: {params['dim']}")
-    plt.tight_layout()
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_PCA.jpg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.savefig(os.path.join(saveDirFig,mouse+'_saved_PCA.svg'), dpi = 400,bbox_inches="tight",transparent=True)
-    plt.close(fig)
-    animalPre['pca'] = [embPre[indexMatPre[:,0]==animalPre["trial_id"][idx] ,:] 
-                                   for idx in animalPre.index]
-    animalRot['pca'] = [embRot[indexMatRot[:,0]==animalRot["trial_id"][idx] ,:] 
-                                   for idx in animalRot.index]
-    dim_red_object['pca'] = copy.deepcopy(modelPCA)
-    print("\b\b\b: Done")
-
-    newAnimalDict = {
-        fnamePre: animalPre,
-        fnameRot: animalRot
-    }
-    with open(os.path.join(filePath,fileName), "wb") as file:
-        pickle.dump(newAnimalDict, file, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(os.path.join(filePath, mouse+"_umap_object.pkl"), "wb") as file:
-        pickle.dump(model, file, protocol=pickle.HIGHEST_PROTOCOL)
 
 #__________________________________________________________________________
 #|                                                                        |#

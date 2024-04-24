@@ -10,4 +10,5 @@ from .load_files import *
 from .plot_utils import *
 from .verbose_functions import *
 from .data_preprocessing import *
+from .add_fields_utils import *
 

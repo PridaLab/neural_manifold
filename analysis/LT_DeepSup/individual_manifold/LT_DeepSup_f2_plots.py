@@ -8,17 +8,16 @@ from scipy import stats
 import networkx as nx
 from structure_index import compute_structure_index, draw_graph
 from sklearn.metrics import pairwise_distances
+from scipy.stats import shapiro
 
 def filter_noisy_outliers(data, D=None):
     if isinstance(D, type(None)):
         D = pairwise_distances(data)
     np.fill_diagonal(D, np.nan)
     nn_dist = np.sum(D < np.nanpercentile(D,10), axis=1)
-    noiseIdx = nn_dist < np.percentile(nn_dist, 20)
+    noiseIdx = nn_dist < np.percentile(nn_dist, 10)
     sum(noiseIdx)
     return noiseIdx
-
-from sklearn.metrics import pairwise_distances
 
 
 def load_pickle(path,name):
@@ -241,11 +240,11 @@ for featureName in ['pos','dir','(pos_dir)', 'vel', 'time']: #,'session']:
 
 #plot for all perc
 dataDir = '/home/julio/Documents/SP_project/Fig2/SI/'
-sIDict = load_pickle(dataDir, 'sI_perc_dict.pkl')
+sIDict = load_pickle(dataDir, 'sI_perc_dict_v2.pkl')
 miceList = list(sIDict.keys())
 for idx in range(6):
-    fig, ax = plt.subplots(1, 5, figsize=(18,6))
-    for feat_idx, featureName in enumerate(['pos','dir','(pos,dir)', 'vel', 'globalTime']): #,'session']:
+    fig, ax = plt.subplots(1, 6, figsize=(18,6))
+    for feat_idx, featureName in enumerate(['pos','dir','(pos,dir)', 'vel', 'globalTime', 'trial']): #,'session']:
         SIList = list()
         mouseList = list()
         layerList = list()
@@ -270,7 +269,13 @@ for idx in range(6):
 
         sns.swarmplot(x='method', y='SI', data=SIPD, hue= 'layer',
                     palette = 'dark:gray', edgecolor = 'gray', ax = ax[feat_idx])
-
+        umap_pd =  SIPD[SIPD['method']=='umap']
+        deep_si =umap_pd[umap_pd['layer']=='deep']['SI'].to_list()
+        sup_si = umap_pd[umap_pd['layer']=='sup']['SI'].to_list()
+        if stats.shapiro(deep_si).pvalue<=0.05 or stats.shapiro(sup_si).pvalue<=0.05:
+            ax[feat_idx].set_title(f"umap ks pvalue= {stats.ks_2samp(deep_si, sup_si)[1]:.4f}")
+        else:
+            ax[feat_idx].set_title(f"umap ttest pvalue: {stats.ttest_ind(deep_si, sup_si)[1]:.4f}")
         # for idx in range(4):
         #     x_space = [-.25+idx, 0.25+idx]
         #     m = np.mean(sSI_array[:,idx])
@@ -285,13 +290,68 @@ for idx in range(6):
         b.tick_params(labelsize=12)
         b.set_yticks([0,0.2,0.4,0.6, 0.8, 1.0])
         b.set_ylim([-.05, 1.05])
-        ax[feat_idx].set_title(featureName)
 
     plt.suptitle(f"NN perc: {100*sIDict[mouse]['clean_traces']['results'][featureName]['nnPercList'][idx]}")
     plt.tight_layout()
     plt.savefig(os.path.join(dataDir,f"SI_perc_{100*sIDict[mouse]['clean_traces']['results'][featureName]['nnPercList'][idx]}_all_feat.svg"), dpi = 400,bbox_inches="tight")
     plt.savefig(os.path.join(dataDir,f"SI_perc_{100*sIDict[mouse]['clean_traces']['results'][featureName]['nnPercList'][idx]}_all_feat.png"), dpi = 400,bbox_inches="tight")
 
+
+#plot MEAN OF all perc
+dataDir = '/home/julio/Documents/SP_project/Fig2/SI/'
+sIDict = load_pickle(dataDir, 'sI_perc_dict_v2.pkl')
+miceList = list(sIDict.keys())
+
+fig, ax = plt.subplots(1, 6, figsize=(18,6))
+for feat_idx, featureName in enumerate(['pos','dir','(pos,dir)', 'vel', 'globalTime', 'trial']): #,'session']:
+    SIList = list()
+    mouseList = list()
+    layerList = list()
+    for mouse in miceList:
+        SIList.append(np.nanmean(sIDict[mouse]['clean_traces']['results'][featureName]['sI']))
+        SIList.append(np.nanmean(sIDict[mouse]['umap']['results'][featureName]['sI']))
+        mouseList = mouseList + [mouse]*2
+        if mouse in deepMice:
+            layerList = layerList + ['deep']*2
+        elif mouse in supMice:
+            layerList = layerList + ['sup']*2
+
+    feature_list = ['og','umap']*len(miceList)
+    SIPD = pd.DataFrame(data={'mouse': mouseList,
+                                     'SI': SIList,
+                                     'layer': layerList,
+                                     'method': feature_list})
+
+    palette= ['#8a8a8aff', '#5fc010ff', '#e08b10ff', '#e01110ff']
+    b = sns.boxplot(x='method', y='SI', data=SIPD, hue = 'layer',
+                palette = palette, linewidth = 1, width= .5, ax = ax[feat_idx])
+
+    sns.swarmplot(x='method', y='SI', data=SIPD, hue= 'layer',
+                palette = 'dark:gray', edgecolor = 'gray', ax = ax[feat_idx])
+    umap_pd =  SIPD[SIPD['method']=='umap']
+    deep_si =umap_pd[umap_pd['layer']=='deep']['SI'].to_list()
+    sup_si = umap_pd[umap_pd['layer']=='sup']['SI'].to_list()
+    if stats.shapiro(deep_si).pvalue<=0.05 or stats.shapiro(sup_si).pvalue<=0.05:
+        ax[feat_idx].set_title(f"umap ks pvalue= {stats.ks_2samp(deep_si, sup_si)[1]:.4f}")
+    else:
+        ax[feat_idx].set_title(f"umap ttest pvalue: {stats.ttest_ind(deep_si, sup_si)[1]:.4f}")
+    # for idx in range(4):
+    #     x_space = [-.25+idx, 0.25+idx]
+    #     m = np.mean(sSI_array[:,idx])
+    #     sd = np.std(sSI_array[:,idx])
+    #     ax.plot(x_space, [m,m], linestyle='--', color=palette[idx])
+    #     ax.fill_between(x_space, m-sd, m+sd, color=palette[idx], alpha = 0.3)
+
+    b.set_xlabel(" ",fontsize=15)
+    b.set_ylabel(f"sI {featureName}",fontsize=15)
+    b.spines['top'].set_visible(False)
+    b.spines['right'].set_visible(False)
+    b.tick_params(labelsize=12)
+    b.set_yticks([0,0.2,0.4,0.6, 0.8, 1.0])
+    b.set_ylim([-.05, 1.05])
+
+plt.savefig(os.path.join(dataDir,f"SI_perc_mean_perc_all_feat.svg"), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(dataDir,f"SI_perc_mean_perc_all_feat.png"), dpi = 400,bbox_inches="tight")
 #plot for all abs
 dataDir = '/home/julio/Documents/SP_project/Fig2/SI/'
 sIDict = load_pickle(dataDir, 'sI_abs_dict.pkl')
@@ -383,6 +443,7 @@ for featureName in ['pos','dir','(pos,dir)', 'vel', 'globalTime', 'trial', 'tria
     sns.swarmplot(x='method', y='SI', data=SIPD, hue= 'layer',
                 palette = 'dark:gray', edgecolor = 'gray', ax = ax)
 
+
     # for idx in range(4):
     #     x_space = [-.25+idx, 0.25+idx]
     #     m = np.mean(sSI_array[:,idx])
@@ -436,7 +497,6 @@ for featureName in ['pos','dir','(pos,dir)', 'vel', 'globalTime']:
 #|                                                                        |#
 #|                             ECCENTRICITY                               |#
 #|________________________________________________________________________|#
-from scipy.stats import shapiro
 
 miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4', 'ChZ7', 'GC7','ChZ8','CZ3', 'CZ4','CZ6', 'CZ8', 'CZ9', 'CGrin1']
 
@@ -494,6 +554,7 @@ plt.savefig(os.path.join(dataDir,'DeepSup_eccentricity.png'), dpi = 400,bbox_inc
 
 data_dir = '/home/julio/Documents/SP_project/Fig2/decoders'
 dec_R2s = load_pickle(data_dir, 'dec_R2s_dict.pkl')
+dec_R2s_shifted = load_pickle(data_dir, 'dec_R2s_dict_shifted.pkl')
 
 palette= ['grey', '#5bb95bff', '#ff8a17ff', '#249aefff']
 label_list = ['posx', 'posy','vel', 'index_mat', 'dir_mat']
@@ -528,9 +589,6 @@ for label_idx, label_name in enumerate(label_list):
         sns.swarmplot(x='signal', y='R2s', data=pd_R2s, hue='layer',
                     palette = 'dark:gray', edgecolor = 'gray', ax = ax[dec_idx])
 
-        # sns.lineplot(x = 'signal', y= 'R2s', data = pd_R2s, units = 'mouse',
-        #             ax = ax[dec_idx], estimator = None, color = ".7", markers = True)
-
         ax[dec_idx].set_ylabel(f'R2s {label_name}')
         ax[dec_idx].set_title(dec_name)
 
@@ -539,14 +597,69 @@ for label_idx, label_name in enumerate(label_list):
     plt.savefig(os.path.join(data_dir,f'dec_{label_name}_test.png'), dpi = 400,bbox_inches="tight")
 
 
+dec_R2s_shifted = load_pickle(data_dir, 'dec_R2s_dict_shifted.pkl')
+
+palette= ['grey', '#249aefff']
+label_list = ['posx']
+signal_list = ['base_signal', 'umap']
+decoder_list = ['xgb']
+miceList = list(dec_R2s.keys())
+
+for label_idx, label_name in enumerate(label_list):
+
+    fig, ax = plt.subplots(1,4,figsize=(15,5))
+    for dec_idx, dec_name in enumerate(decoder_list):
+        R2s_list = list()
+        pd_mice_list = list()
+        pd_sig_list = list()
+        pd_layer_list = list()
+        for mouse in miceList:
+            for sig in signal_list:
+                R2s_list.append(np.mean(dec_R2s[mouse][sig][dec_name][:,label_idx,0], axis=0))
+                pd_mice_list.append(mouse)
+                pd_sig_list.append(sig)
+                if mouse in deepMice:
+                    pd_layer_list.append('deep')
+                elif mouse in supMice:
+                    pd_layer_list.append('sup')
+
+        pd_R2s = pd.DataFrame(data={'mouse': pd_mice_list,
+                                     'R2s': R2s_list,
+                                     'signal': pd_sig_list,
+                                     'layer': pd_layer_list})
+
+        b = sns.barplot(x='signal', y='R2s', data=pd_R2s, hue='layer',
+                palette = palette, linewidth = 1, width= .5, ax = ax[dec_idx])
+        sns.swarmplot(x='signal', y='R2s', data=pd_R2s, hue='layer',
+                    palette = 'dark:gray', edgecolor = 'gray', ax = ax[dec_idx])
+
+        pd_R2s_umap = pd_R2s[pd_R2s['signal']=='umap']
+        deep_umap = pd_R2s_umap[pd_R2s_umap['layer']=='deep']['R2s'].to_list()
+        sup_umap = pd_R2s_umap[pd_R2s_umap['layer']=='sup']['R2s'].to_list()
+
+        deepShapiro = shapiro(deep_umap)
+        supShapiro = shapiro(sup_umap)
+
+        if deepShapiro.pvalue<=0.05 or supShapiro.pvalue<=0.05:
+            ax[dec_idx].set_title(f'{dec_name} Umap Kstest : {stats.ks_2samp(deep_umap, sup_umap)[1]:.4f}')
+        else:
+            ax[dec_idx].set_title(f'{dec_name} Umap ttest : {stats.ttest_ind(deep_umap, sup_umap)[1]:.4f}')
+
+        ax[dec_idx].set_ylabel(f'R2s {label_name}')
+
+    fig.suptitle(label_name)
+    plt.savefig(os.path.join(data_dir,f'dec_{label_name}_test.svg'), dpi = 400,bbox_inches="tight")
+    plt.savefig(os.path.join(data_dir,f'dec_{label_name}_test.png'), dpi = 400,bbox_inches="tight")
+
 
 
 from sklearn.metrics import median_absolute_error
-
 data_dir = '/home/julio/Documents/SP_project/Fig2/decoders'
 dec_R2s = load_pickle(data_dir, 'dec_R2s_dict.pkl')
 dec_pred = load_pickle(data_dir, 'dec_pred_dict.pkl')
 miceList = list(dec_R2s.keys())
+
+
 izq = ['GC2', 'GC3', 'CZ3']
 label_name = 'posx'
 label_idx = 0
@@ -571,7 +684,6 @@ for mouse in miceList:
     og_pred = dec_pred[mouse][label_idx][dec_idx][:,:,2].reshape(-1,1)[test]
     umap_pred = dec_pred[mouse][label_idx][dec_idx][:,:,-1].reshape(-1,1)[test]
 
-
     min_x = np.min(ground_truth)
     max_x = np.max(ground_truth)
     ndims = 1
@@ -582,7 +694,6 @@ for mouse in miceList:
 
     #Generate the grid containing the indices of the points of the label and 
     #the coordinates as the mid point of edges
-
     grid = np.empty([grid_edges.shape[0]], object)
     mesh = meshgrid2(tuple([np.arange(s) for s in grid.shape]))
     meshIdx = np.vstack([col.ravel() for col in mesh]).T
@@ -633,7 +744,7 @@ for mouse in ['GC2', 'GC3', 'CZ3']:
 sup_color = '#9900ffff'
 deep_color = '#cc9900ff'
 
-bin_space = np.linspace(0,120,n_bins)
+bin_space = np.linspace(0,70,n_bins)
 
 plt.figure()
 ax = plt.subplot(2,1,1)
@@ -667,6 +778,31 @@ plt.savefig(os.path.join(data_dir,'DeepSup_error_by_pos.png'), dpi = 400,bbox_in
 
 
 
+deep_error = np.mean(error_bin_deep[:,7:8,1], axis=1)
+sup_error = np.mean(error_bin_sup[:,7:8,1], axis=1)
+
+deep_shapiro = shapiro(deep_error)
+sup_shapiro = shapiro(sup_error)
+if deep_shapiro.pvalue<=0.05 or sup_shapiro.pvalue<=0.05:
+    print(f'Umap Kstest : {stats.ks_2samp(deep_error, sup_error)}')
+else:
+    print(f'Umap ttest : {stats.ttest_ind(deep_error, sup_error)}')
+
+
+pd_R2s = pd.DataFrame(data={'mouse': deepMice + supMice,
+                             'R2s': list(deep_error) + list(sup_error),
+                             'layer': ['deep']*len(deep_error) + ['sup']*len(sup_error)})
+#DECODERS 
+plt.figure()
+ax = plt.subplot(1,1,1)
+b = sns.barplot(x='layer', y='R2s', data=pd_R2s,
+        linewidth = 1, width= .5, ax = ax)
+sns.swarmplot(x='layer', y='R2s', data=pd_R2s,
+            palette = 'dark:gray', edgecolor = 'gray', ax = ax)
+
+plt.figure()
+sns.boxplot(x=)
+#
 plt.figure()
 ax = plt.subplot(2,1,1)
 vals = (count_bin_pred_deep[:,:,0] - count_bin_deep)/(count_bin_deep)
@@ -1000,35 +1136,56 @@ print('Right:', stats.ttest_ind(np.nanmean(deepMat[6:9,:,1],axis=0), np.nanmean(
 dataDir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
 saveDir = '/home/julio/Documents/SP_project/Fig2/dimensionality/emb_example/'
 
+
 mouseExamples = {
     'deep': 'GC2',
-    'sup': 'CZ3',
+    'sup': 'CZ8',
 }
 examplesValues = {
-    'supIterIsomap': 2,
+    'supIterIsomap': 1,
     'supAngleIsomap': [75,-95],
     'deepAngleIsomap': [69, 78],
     'deepIterIsomap': 1,
     
-    'supIterPCA': 2,
+    'supIterPCA': 1,
     'supAnglePCA': [76,-50],
     'deepAnglePCA': [42, 90],
     'deepIterPCA': 1,
 
-    'supIterUmap': 2,
-    'supAngleUmap': [70,-130],
+    'supIterUmap': 1,
+    'supAngleUmap': [76,-164],
     'deepAngleUmap': [51, -68],
+    'deepIterUmap': 1,
+}
+
+mouseExamples = {
+    'deep': 'ChZ8',
+    'sup': 'CZ8',
+}
+examplesValues = {
+    'supIterIsomap': 1,
+    'supAngleIsomap': [75,-95],
+    'deepAngleIsomap': [69, 78],
+    'deepIterIsomap': 1,
+    
+    'supIterPCA': 1,
+    'supAnglePCA': [76,-50],
+    'deepAnglePCA': [42, 90],
+    'deepIterPCA': 1,
+
+    'supIterUmap': 1,
+    'supAngleUmap': [76,-164],
+    'deepAngleUmap': [-85, 110],
     'deepIterUmap': 1,
 }
 
 for case, mouse in mouseExamples.items():
     print(f"Working on mouse {mouse}: ")
-    dim_red_object = dict()
     fileName =  mouse+'_df_dict.pkl'
     filePath = os.path.join(dataDir, mouse)
     pdMouse = load_pickle(filePath,fileName)
 
-    for emb_method in ['Isomap', 'PCA']:
+    for emb_method in ['Umap','Isomap', 'PCA']:
         pos = copy.deepcopy(np.concatenate(pdMouse ['pos'].values, axis=0))
         dir_mat = copy.deepcopy(np.concatenate(pdMouse ['dir_mat'].values, axis=0))
         time = np.arange(pos.shape[0])
@@ -1062,12 +1219,14 @@ for case, mouse in mouseExamples.items():
         ax = plt.subplot(1,1,1, projection = '3d')
         b = ax.scatter(*emb[:,:3].T, color = dir_color,s = 10)
         personalize_ax(ax, examplesValues[case+'Angle'+emb_method])
+        ax.set_aspect('equal', adjustable='box')
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_dir.svg'), dpi = 400,bbox_inches="tight")
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_dir.png'), dpi = 400,bbox_inches="tight")
 
         fig = plt.figure(figsize=(8,8))
         ax = plt.subplot(1,1,1, projection = '3d')
         b = ax.scatter(*emb[:,:3].T, c = pos[:,0],s = 10, cmap = 'inferno', vmin= 0, vmax = 70)
+        ax.set_aspect('equal', adjustable='box')
         personalize_ax(ax, examplesValues[case+'Angle'+emb_method])
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_pos.svg'), dpi = 400,bbox_inches="tight")
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_pos.png'), dpi = 400,bbox_inches="tight")
@@ -1075,6 +1234,7 @@ for case, mouse in mouseExamples.items():
         fig = plt.figure(figsize=(8,8))
         ax = plt.subplot(1,1,1, projection = '3d')
         b = ax.scatter(*emb[:,:3].T, c = time[:],s = 10, cmap = 'YlGn_r', vmax = np.percentile(time, 95))
+        ax.set_aspect('equal', adjustable='box')
         personalize_ax(ax, examplesValues[case+'Angle'+emb_method])
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_time.svg'), dpi = 400,bbox_inches="tight")
         plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_{emb_method}_emb_time.png'), dpi = 400,bbox_inches="tight")
@@ -1225,4 +1385,241 @@ for case, mouse in mouseExamples.items():
     personalize_ax(ax, examplesValues[case+'Angle'])
     plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_manifoldCells_emb.svg'), dpi = 400,bbox_inches="tight")
     plt.savefig(os.path.join(saveDir,f'{case}_{mouse}_manifoldCells_emb.png'), dpi = 400,bbox_inches="tight")
+
+
+
+
+#__________________________________________________________________________
+#|                                                                        |#
+#|                          MUTUAL INFORMATION                            |#
+#|________________________________________________________________________|#
+supMice = ['CZ3', 'CZ4','CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+palette= ["#cc9900ff", "#9900ffff"]
+
+
+
+save_dir = '/home/julio/Documents/SP_project/Fig2/mutual_info/'
+mi_scores_dict = load_pickle(save_dir, 'mi_scores_sep_dict.pkl')
+mi_shuffled_scores_dict = load_pickle(save_dir, 'mi_scores_random_dict.pkl')
+
+mi_scores = list()
+mi_shuffled_scores = list()
+mouse_list = list()
+layer_list = list()
+
+for mouse in miceList:
+    mi_scores.append(mi_scores_dict[mouse]['mi_scores'])
+    mi_shuffled_scores.append(np.percentile(mi_shuffled_scores_dict[mouse]['mi_scores'],99,axis=2))
+    num_cells = mi_scores_dict[mouse]['mi_scores'].shape[1]
+    mouse_list.append([mouse]*num_cells)
+    if mouse in deepMice:
+        layer_list.append(['deep']*num_cells)
+    elif mouse in supMice:
+        layer_list.append(['sup']*num_cells)
+
+
+
+mi_scores = np.hstack(mi_scores)
+mi_shuffled_scores = np.hstack(mi_shuffled_scores)
+mouse_list = sum(mouse_list, []) #[cell for day in mouse_list cell in day]
+layer_list = sum(layer_list, []) #[cell for day in mouse_list cell in day]
+
+pd_mi_scores = pd.DataFrame(data={'posx': mi_scores[0,:],
+                     'dir': mi_scores[2,:],
+                     'vel': mi_scores[3,:],
+                     'time': mi_scores[4,:],
+                     'mouse': mouse_list,
+                     'layer': layer_list}) 
+
+plt.figure(figsize=(8,10))
+for idx, label_name in enumerate(['posx', 'dir', 'vel', 'time']):
+    ax = plt.subplot(4,1,idx+1)
+    b = sns.histplot(pd_mi_scores, x=label_name, 
+        binwidth=0.01, kde=True, stat='probability',
+        hue='layer',ax = ax, palette=palette, fill=True)
+    ax.set_xlim([-0.05, 0.65])
+    #b.containers[0].remove() # remove the bars
+plt.tight_layout()
+plt.savefig(os.path.join(save_dir,'mutual_info_hist.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(save_dir,'mutual_info_hist.png'), dpi = 400,bbox_inches="tight")
+
+sup_pd_mi_scores = pd_mi_scores[pd_mi_scores['layer']=='sup']
+deep_pd_mi_scores = pd_mi_scores[pd_mi_scores['layer']=='deep']
+
+plt.figure(figsize=(20,4))
+for idx, label_name in enumerate(['dir', 'vel', 'time']):
+    ax = plt.subplot(1,5,idx+1)
+    sns.kdeplot(pd_mi_scores, x='posx', y=label_name,fill=True, hue='layer', palette = palette, alpha=0.7, label = 'posx-dir')
+    plt.ylim([-0.1,0.65])
+    plt.xlim([-0.1,0.65])
+ax = plt.subplot(1,5,4)
+sns.kdeplot(pd_mi_scores, x='dir', y='time',fill=True, hue='layer', palette = palette, alpha=0.7)
+plt.ylim([-0.1,0.65])
+plt.xlim([-0.1,0.65])
+ax = plt.subplot(1,5,5)
+sns.kdeplot(pd_mi_scores, x='dir', y='vel',fill=True, hue='layer', palette = palette, alpha=0.7)
+plt.ylim([-0.1,0.65])
+plt.xlim([-0.1,0.65])
+plt.tight_layout()
+
+plt.savefig(os.path.join(save_dir,'mutual_info_cross_kdes.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(save_dir,'mutual_info_cross_kdes.png'), dpi = 400,bbox_inches="tight")
+
+
+plt.figure(figsize=(8,8))
+sup_pd_mi_scores = pd_mi_scores[pd_mi_scores['layer']=='sup']
+deep_pd_mi_scores = pd_mi_scores[pd_mi_scores['layer']=='deep']
+
+for idx, label_name in enumerate(['dir', 'vel', 'time']):
+    ax = plt.subplot(2,4,idx+1)
+    sns.kdeplot(sup_pd_mi_scores, x='posx', y=label_name,fill=True, alpha=0.7, label = 'posx-'+label_name)
+    plt.ylim([-0.1,0.65])
+    plt.xlim([-0.1,0.65])
+
+    ax = plt.subplot(2,4,idx+4+1)
+    sns.kdeplot(deep_pd_mi_scores, x='posx', y=label_name,fill=True, alpha=0.7, label = 'posx-'+label_name)
+    plt.ylim([-0.1,0.65])
+    plt.xlim([-0.1,0.65])
+
+plt.savefig(os.path.join(save_dir,'mutual_info_cross_kdes.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(save_dir,'mutual_info_cross_kdes.png'), dpi = 400,bbox_inches="tight")
+
+
+pd_mi_scores2 = pd.DataFrame(data={'MI': mi_scores[(0,2,3),:].reshape(-1,1)[:,0],
+                     'label': ['posx']*mi_scores.shape[1] + ['dir']*mi_scores.shape[1] + ['vel']*mi_scores.shape[1],
+                     'layer': list(layer_list)*3,
+                     'mouse': mouse_list*3}) 
+
+
+
+
+m = np.percentile(mi_shuffled_scores, 99,axis=1)
+
+
+plt.figure()
+sns.violinplot(data=pd_mi_scores2, x="label", y="MI", hue = 'layer', 
+    inner="quart", cut=0, linewidth=1, palette = palette[::-1], linecolor="k", hue_order=['sup', 'deep'])
+plt.plot([-0.45,0.45], [m[0], m[0]], 'r--')
+plt.plot([0.55,1.45], [m[2], m[2]], 'r--')
+plt.plot([1.55,2.45], [m[3], m[3]], 'r--')
+
+plt.fill_between(np.array([-0.45,0.45]), np.array([m[0]-sd[0], m[0]-sd[0]]),
+    np.array([m[0]+sd[0], m[0]+sd[0]]), color='r', alpha=0.3)
+
+plt.savefig(os.path.join(save_dir,'mutual_info_violinplots.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(save_dir,'mutual_info_violinplots.png'), dpi = 400,bbox_inches="tight")
+
+
+plt.figure()
+sns.barplot(data=pd_mi_scores2, x="label", y="MI", hue = 'layer', 
+    palette = palette, estimator='median')
+
+
+from statsmodels.formula.api import ols
+import statsmodels.api as sm
+#perform two-way ANOVA
+model = ols('MI ~ C(label) + C(layer) + C(label):C(layer)', data=pd_mi_scores2).fit()
+sm.stats.anova_lm(model, typ=2)
+
+
+deep_mi = pd_mi_scores2[pd_mi_scores2['layer']=='deep']
+sup_mi = pd_mi_scores2[pd_mi_scores2['layer']=='sup']
+for y in ['posx', 'dir', 'vel']:
+    deep_temp = deep_mi[deep_mi["label"]==y]["MI"].to_list()
+    sup_temp = sup_mi[sup_mi["label"]==y]["MI"].to_list()
+
+    deepShapiro = shapiro(deep_temp)
+    supShapiro = shapiro(sup_temp)
+
+    if deepShapiro.pvalue<=0.05 or supShapiro.pvalue<=0.05:
+        print(y,' :',stats.ks_2samp(deep_temp, sup_temp))
+    else:
+        print(y,' :', stats.ttest_ind(deep_temp, sup_temp))
+
+
+
+
+#__________________________________________________________________________
+#|                                                                        |#
+#|                           plot firing rates                            |#
+#|________________________________________________________________________|#
+
+supMice = ['CZ3', 'CZ4','CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deepMice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+
+
+
+palette= ["#cc9900ff", "#9900ffff"]
+
+
+data_dir = '/home/julio/Documents/SP_project/Fig2/firing_rates/'
+firing_rates =load_pickle(data_dir, 'firing_rates_dict.pkl')
+
+
+event_rate = list()
+mouse_list = list()
+layer_list = list()
+for mouse in miceList:
+    event_rate.append(firing_rates[mouse])
+    num_cells = firing_rates[mouse].shape[0]
+    print(mouse, num_cells)
+    mouse_list.append([mouse]*num_cells)
+    if mouse in deepMice:
+        layer_list.append(['deep']*num_cells)
+    elif mouse in supMice:
+        layer_list.append(['sup']*num_cells)
+
+
+event_rate = np.hstack(event_rate)
+mouse_list = sum(mouse_list, []) #[cell for day in mouse_list cell in day]
+layer_list = sum(layer_list, []) #[cell for day in mouse_list cell in day]
+
+
+pd_event_rate = pd.DataFrame(data={'event_rate': event_rate,
+                     'mouse': mouse_list,
+                     'layer': layer_list}) 
+
+
+plt.figure(figsize=(8,8))
+ax = plt.subplot(1,1,1)
+b = sns.histplot(pd_event_rate, x='event_rate', 
+    binwidth=0.01, kde=True, stat='probability',
+    hue='layer',ax = ax, palette=palette, fill=True)
+plt.tight_layout()
+plt.savefig(os.path.join(data_dir,'event_rate_hist.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(data_dir,'event_rate_hist.png'), dpi = 400,bbox_inches="tight")
+
+
+plt.figure(figsize=(8,8))
+sns.violinplot(data=pd_event_rate, x="layer", y="event_rate", 
+    inner="quart", cut=0, linewidth=1, palette = palette, linecolor="k")
+plt.savefig(os.path.join(data_dir,'event_rate_violin.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(data_dir,'event_rate_violin.png'), dpi = 400,bbox_inches="tight")
+
+
+plt.figure(figsize=(8,8))
+sns.boxplot(data=pd_event_rate, x="layer", y="event_rate", 
+    linewidth=1, palette = palette)
+plt.savefig(os.path.join(data_dir,'event_rate_boxplot.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(data_dir,'event_rate_boxplot.png'), dpi = 400,bbox_inches="tight")
+
+
+
+
+deepRate = pd_event_rate[pd_event_rate['layer']=='deep']['event_rate']
+supRate = pd_event_rate[pd_event_rate['layer']=='sup']['event_rate']
+deepShapiro = shapiro(deepRate)
+supShapiro = shapiro(supRate)
+
+if deepShapiro.pvalue<=0.05 or supShapiro.pvalue<=0.05:
+    print('Rate:',stats.ks_2samp(deepRate, supRate))
+else:
+    print('Rate:', stats.ttest_ind(deepRate, supRate))
+
 

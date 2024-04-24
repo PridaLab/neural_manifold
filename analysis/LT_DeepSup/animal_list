@@ -1,0 +1,39 @@
+## SINGLE COLOR ##
+Thy1GCaMP = ['GC1', 'GC2', 'GC3', 'GC4', 'GC5_nvista', 'GC7', 'TGrin1', 'DDC']
+Chrna7 = ['ChZ2' 'ChZ4' 'ChZ6' 'ChZ7' 'ChZ8' 'ChZ12']
+CalbZurich = ['CZ3', 'CZ4', 'CZ6', 'CZ7', 'CZ8', 'CZ9', 'CGrin1']
+
+## DUAL COLOR ##
+CalbGRIN = ['CalbGRIN1', 'CalbGRIN2']
+Thy1jRGECO = ['Thy1jRGECO1', 'Thy1jRGECO21', 'Thy1jRGECO22', 'Thy1jRGECO23']
+ThyCalbRCaMP2 = ['ThyCalbRCaMP2', 'ThyCalbRCaMP8', 'ThyCalbRCaMP9']
+
+## DREADDS ##
+Chrna7Charly = ['ChRNA7Charly1', 'ChRNA7Charly2']
+CalbCharly = ['CalbCharly1', 'CalbCharly2', 'CalbCharly10', 'CalbCharly11', 'CalbCharly12', 'CalbCharly13']
+CalbV = ['CalbV23', 'CalbV25', 'DD2'] #antes de cambiar el serotipo del virus dreadds
+
+
+
+
+#__________________________________________________________________________
+#|                                                                        |#
+#|                  	            USED                                  |#
+#|________________________________________________________________________|#
+
+## SINGLE COLOR ##
+Thy1GCaMP = ['Thy1GC-2', 'Thy1GC-3', 'Thy1GC-5', 'Thy1GC-7', 'Thy1GCephysGrin-1'] #
+Chrna7 = ['Chrna7Zurich-4', 'Chrna7Zurich-7']
+CalbZurich = ['CalbZurich-3', 'CalbZurich-4', 'CalbZurich-6', 'CalbZurich-8', 'CalbZurich-9', 'CalbephysGRIN-1']
+
+## DUAL COLOR ##
+Thy1jRGECO = ['Thy1jRGECO22', 'Thy1jRGECO23']
+ThyCalbRCaMP2 = ['ThyCalbRCaMP2']
+
+## DREADDS ##
+Chrna7Charly = ['ChRNA7Charly-1', 'ChRNA7Charly-2']
+CalbCharly = ['CalbCharly-2', 'CalbCharly-11']
+CalbV = ['CalbV-23', 'DD2']
+
+
+

@@ -220,7 +220,7 @@ for mouse in miceList:
     Ddown = pairwise_distances(downSignal)
     a = rpp_py.run(f"--dim 2 --format point-cloud --threshold {int(np.ceil(np.nanmax(Ddown)))}",downSignal)
     print("\b\b\b: Done")
-
+    #compute bars
     diagrams = list()
     diagrams.append(np.zeros((a[0].shape[0],2)))
     for b in range(diagrams[0].shape[0]):
@@ -237,7 +237,7 @@ for mouse in miceList:
     for b in range(diagrams[2].shape[0]):
         diagrams[2][b][0] = a[2][b][0]
         diagrams[2][b][1] = a[2][b][1]
-
+    #compute dense bars
     trilD = Ddown[np.tril_indices_from(Ddown, k=-1)]
     nEdges = int(Ddown.shape[0]*(Ddown.shape[0]-1)/2)
     computedDistances = dict()

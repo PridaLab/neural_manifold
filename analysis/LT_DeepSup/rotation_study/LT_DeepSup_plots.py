@@ -263,6 +263,7 @@ for embName in ['pca', 'isomap', 'umap']:
 rotAngleList = list()
 layerList = list()
 embList = list()
+mouseList = list()
 for mouse in miceList:
     if mouse == 'CGrin1': continue;
     for embName in['pca', 'isomap', 'umap']:
@@ -272,10 +273,11 @@ for mouse in miceList:
             layerList.append('deep')
         elif mouse in supMice:
             layerList.append('sup')
-
+        mouseList.append(mouse)
 anglePD = pd.DataFrame(data={'angle': rotAngleList,
                             'emb': embList,
-                            'layer': layerList})
+                            'layer': layerList,
+                            'mouse': mouseList})
 
 palette= ["#32e653", "#E632C5"]
 fig, ax = plt.subplots(1, 1, figsize=(6,6))
@@ -294,15 +296,8 @@ dataDir = '/home/julio/Documents/SP_project/LT_DeepSup/rotation/'
 rot_error_dict = load_pickle(dataDir, 'rot_error_dict.pkl')
 miceList = list(rot_error_dict.keys())
 for emb in ['umap','isomap','pca']:
-    deepAngle = []
-    supAngle = []
-    for mouse in miceList:
-        if mouse == 'CGrin1': continue;
-        if mouse in deepMice:
-            deepAngle.append(rot_error_dict[mouse][emb]['rotAngle'])
-        if mouse in supMice:
-            supAngle.append(rot_error_dict[mouse][emb]['rotAngle'])
-
+    deepAngle = anglePD[anglePD['emb']==emb][anglePD['layer']=='deep']['angle']
+    supAngle = anglePD[anglePD['emb']==emb][anglePD['layer']=='sup']['angle']
     deepShapiro = shapiro(deepAngle)
     supShapiro = shapiro(supAngle)
 
@@ -2076,7 +2071,7 @@ plt.savefig(os.path.join(dataDir,'DeepSup_eccentricity.png'), dpi = 400,bbox_inc
 #|                               REMAP DIST                               |#
 #|________________________________________________________________________|#
 
-miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ12', 'CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 dataDir = '/home/julio/Documents/SP_project/LT_DeepSup/rotation/'
 remapDist_dict = load_pickle(dataDir, 'remap_distance_dict.pkl')
 fig, ax = plt.subplots(1, 3, figsize=(10,6))
@@ -2084,8 +2079,8 @@ for idx, emb in enumerate(['umap','isomap','pca']):
     remapDist = list()
     for mouse in miceList:
         remapDist.append(remapDist_dict[mouse][emb]['remapDist'])
-    print(emb, ':', stats.ttest_ind(remapDist[:5], remapDist[5:], equal_var=True))
-    pd_dist = pd.DataFrame(data={'layer': ['deep']*5 + ['sup']*5,
+    print(emb, ':', stats.ttest_ind(remapDist[:6], remapDist[6:], equal_var=True))
+    pd_dist = pd.DataFrame(data={'layer': ['deep']*6 + ['sup']*5,
                                      'dist': remapDist})
     palette= ["#1EE153", "#E11EAC"]
     b = sns.barplot(x='layer', y='dist', data=pd_dist,
@@ -2117,10 +2112,8 @@ for emb in ['umap','isomap','pca']:
 
     if deepShapiro.pvalue<=0.05 or supShapiro.pvalue<=0.05:
         print(f'{emb} Distance:',ks_2samp(deepDist, supDist))
-        ax.set_title(f'ks_2samp: {stats.ks_2samp(deepDist, supDist).pvalue:.4f}')
     else:
         print(f'{emb} Distance:', stats.ttest_ind(deepDist, supDist))
-        ax.set_title(f'ttest: {stats.ttest_ind(deepDist, supDist).pvalue:.4f}')
 
 
 
