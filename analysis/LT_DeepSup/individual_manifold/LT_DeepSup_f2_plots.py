@@ -838,6 +838,197 @@ plt.savefig(os.path.join(data_dir,'DeepSup_pred_pos_by_pos.svg'), dpi = 400,bbox
 plt.savefig(os.path.join(data_dir,'DeepSup_pred_pos_by_pos.png'), dpi = 400,bbox_inches="tight")
 
 
+#__________________________________________________________________________
+#|                                                                        |#
+#|                             CROSS DECODER                              |#
+#|________________________________________________________________________|#
+
+data_dir = '/home/julio/Documents/SP_project/Fig2/decoders'
+mice_list = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+sup_mice = ['CZ3', 'CZ4','CZ6', 'CZ8', 'CZ9', 'CGrin1']
+deep_mice = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7']
+
+
+palette= ['#5bb95bff', '#ff8a17ff', '#249aefff']
+label_list = ['posx', 'vel', 'dir_mat']
+signal_list = ['pca', 'isomap', 'umap']
+decoder_list = ['wf','wc','xgb','svr']
+
+
+for label_idx, label_name in enumerate(label_list):
+    fig, ax = plt.subplots(1,4,figsize=(15,5))
+    for dec_idx, dec_name in enumerate(decoder_list):
+        R2s_list = list()
+        pd_miceList = list()
+        pd_sig_list = list()
+        pd_state_list = list()
+        for mouse in mice_list:
+            if mouse in deep_mice:
+                layer = 'deep'
+            elif mouse in sup_mice:
+                layer = 'sup'
+            else:
+                layer = 'none'
+            dec_R2s = load_pickle(data_dir, f'{mouse}_cross_dec_R2s_dict.pkl')
+            for case in list(dec_R2s.keys()):
+                mouse2 = case[2+len(mouse):-1]
+                if mouse2 in deep_mice:
+                    layer2 = 'deep'
+                elif mouse in sup_mice:
+                    layer2 = 'sup'
+                else:
+                    layer2 = 'none'
+                if layer2 != layer: continue
+                for sig in signal_list:
+                    R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,0])
+                    pd_miceList.append(mouse)
+                    pd_sig_list.append(sig+'_'+layer)
+                    pd_state_list.append('pre')
+                    R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,1])
+                    pd_miceList.append(mouse)
+                    pd_sig_list.append(sig+'_'+layer)            
+                    pd_state_list.append('aligned')
+
+        pd_R2s = pd.DataFrame(data={'mouse': pd_miceList,
+                                     'R2s': R2s_list,
+                                     'state': pd_state_list,
+                                     'signal': pd_sig_list})
+
+        b = sns.barplot(x='state', y='R2s', data=pd_R2s, hue='signal',
+                linewidth = 1, width= .5, ax = ax[dec_idx])
+
+        ax[dec_idx].set_ylabel(f'R2s {label_name}')
+        ax[dec_idx].set_title(dec_name)
+        fig.suptitle(label_name)
+
+        plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_boxplot.svg'), dpi = 400,bbox_inches="tight")
+        plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_boxplot.png'), dpi = 400,bbox_inches="tight")
+
+
+from statsmodels.formula.api import ols
+import statsmodels.api as sm
+from scipy import stats
+
+dec_idx = 2
+dec_name = 'xgb'
+for label_idx, label_name in enumerate(label_list):
+    fig, ax = plt.subplots(1,3,figsize=(15,5))
+    for sig_idx, sig in enumerate(signal_list):
+        R2s_list = list()
+        pd_miceList = list()
+        pd_layer_list = list()
+        pd_state_list = list()
+        for mouse in mice_list:
+            if mouse in deep_mice:
+                layer = 'deep'
+            elif mouse in sup_mice:
+                layer = 'sup'
+            else:
+                layer = 'none'
+            dec_R2s = load_pickle(data_dir, f'{mouse}_cross_dec_R2s_dict.pkl')
+            for case in list(dec_R2s.keys()):
+                mouse2 = case[2+len(mouse):-1]
+                if mouse2 in deep_mice:
+                    layer2 = 'deep'
+                elif mouse2 in sup_mice:
+                    layer2 = 'sup'
+                else:
+                    layer2 = 'none'
+                    print(case)
+
+                R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,0])
+                pd_miceList.append(mouse)
+                pd_layer_list.append(layer+'_'+layer2)
+                pd_state_list.append('pre')
+                R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,1])
+                pd_miceList.append(mouse)
+                pd_layer_list.append(layer+'_'+layer2)
+                pd_state_list.append('aligned')
+
+        pd_R2s = pd.DataFrame(data={'mouse': pd_miceList,
+                                     'R2s': R2s_list,
+                                     'state': pd_state_list,
+                                     'layer': pd_layer_list})
+
+        # b = sns.barplot(x='state', y='R2s', data=pd_R2s, hue='layer',
+        #         linewidth = 1, width= .5, ax = ax[sig_idx])
+
+
+        # plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_boxplot_v2.svg'), dpi = 400,bbox_inches="tight")
+        # plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_boxplot_v2.png'), dpi = 400,bbox_inches="tight")
+
+        print(f'-----------{dec_name} {label_name} {sig} -----------')
+        model = ols('R2s ~ C(state) + C(layer) + C(state):C(layer)', data=pd_R2s).fit()
+        print(sm.stats.anova_lm(model, typ=2))
+
+        pre_pd_R2s = pd_R2s[pd_R2s['state']=='pre']
+        pre_deep = pre_pd_R2s[pre_pd_R2s['layer']=='deep_deep']['R2s'].tolist()
+        pre_sup = pre_pd_R2s[pre_pd_R2s['layer']=='sup_sup']['R2s'].tolist()
+
+        alig_pd_R2s = pd_R2s[pd_R2s['state']=='aligned']
+        alig_deep = alig_pd_R2s[alig_pd_R2s['layer']=='deep_deep']['R2s'].tolist()
+        alig_sup = alig_pd_R2s[alig_pd_R2s['layer']=='sup_sup']['R2s'].tolist()
+
+        print('(pre,deep) - (pre, sup)', stats.ttest_ind(pre_deep, pre_sup))
+        print('(pre,deep) - (ali,deep)', stats.ttest_ind(pre_deep, alig_deep))
+        print('(pre,deep) - (ali, sup)', stats.ttest_ind(pre_deep, alig_sup))
+
+        print('(pre, sup) - (ali,deep)', stats.ttest_ind(pre_sup, alig_deep))
+        print('(pre, sup) - (ali, sup)', stats.ttest_ind(pre_sup, alig_sup))
+
+        print('(ali,deep) - (ali, sup)', stats.ttest_ind(alig_deep, alig_sup))
+
+
+
+
+
+for label_idx, label_name in enumerate(label_list):
+    fig, ax = plt.subplots(1,4,figsize=(15,5))
+    for dec_idx, dec_name in enumerate(decoder_list):
+        R2s_list = list()
+        pd_miceList = list()
+        pd_sig_list = list()
+        pd_state_list = list()
+        for mouse in mice_list:
+            dec_R2s = load_pickle(data_dir, f'{mouse}_cross_dec_R2s_dict.pkl')
+            for case in list(dec_R2s.keys()):
+                for sig in signal_list:
+                    R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,0])
+                    pd_miceList.append(mouse)
+                    pd_sig_list.append(sig)
+                    pd_state_list.append('pre')
+                    R2s_list.append(dec_R2s[case][sig][dec_name][label_idx,1])
+                    pd_miceList.append(mouse)
+                    pd_sig_list.append(sig)            
+                    pd_state_list.append('aligned')
+
+        pd_R2s = pd.DataFrame(data={'mouse': pd_miceList,
+                                     'R2s': R2s_list,
+                                     'state': pd_state_list,
+                                     'signal': pd_sig_list})
+
+        b = sns.violinplot(x='state', y='R2s', data=pd_R2s, hue='signal',
+                palette = palette, linewidth = 1, width= .5, ax = ax[dec_idx])
+
+        ax[dec_idx].set_ylabel(f'R2s {label_name}')
+        ax[dec_idx].set_title(dec_name)
+        fig.suptitle(label_name)
+
+        plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_violinplot.svg'), dpi = 400,bbox_inches="tight")
+        plt.savefig(os.path.join(data_dir,f'cross_dec_{label_name}_test_violinplot.png'), dpi = 400,bbox_inches="tight")
+
+
+#cross-decoder vs intra-decoder
+for x in ['sup', 'deep']:
+    t_single = pd_single[pd_single['layer']==x]['R2s'].to_list()
+    y_cross = pd_cross[pd_cross['layer']==x+'_'+x]
+    for c in ['pre', 'aligned']:
+        c_cross = y_cross[y_cross['state']==c]['R2s'].to_list()
+
+        if stats.shapiro(t_single).pvalue<=0.05 or stats.shapiro(c_cross).pvalue<=0.05:
+            print(f"single {x} - cross {x+'_'+x} | {c}: {stats.ks_2samp(t_single, c_cross)}")
+        else:
+            print(f"single {x} - cross {x+'_'+x} | {c}: {stats.ttest_ind(t_single, c_cross)}")
 
 #__________________________________________________________________________
 #|                                                                        |#

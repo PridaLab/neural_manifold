@@ -12,7 +12,7 @@ import umap
 from sklearn.manifold import Isomap
 from sklearn.decomposition import PCA
 from sklearn.model_selection import RepeatedKFold
-from sklearn.metrics import median_absolute_error
+from sklearn.metrics import median_absolute_error, f1_score
 
 #INNER PACKAGE IMPORTS
 from neural_manifold import general_utils as gu
@@ -21,11 +21,11 @@ from neural_manifold.decoders.decoder_classes import DECODERS  #decoders classes
 import warnings as warnings
 warnings.filterwarnings(action='ignore', category=UserWarning) #supress slice-data warning for XGBoost: 
                                                                #https://stackoverflow.com/questions/67225016/warning-occuring-in-xgboost
-
+metrics = {'median_absolute_error': median_absolute_error, 'f1_score': f1_score}
 @gu.check_inputs_for_pd
 def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = None,
                     trial_signal = None, decoder_list = ["wf", "wc", "xgb", "svr"],
-                    n_dims = 10, n_splits=10, min_dist = 0.1, verbose = False):  
+                    n_dims = 10, n_splits=10, min_dist = 0.1, metric = 'median_absolute_error', verbose = False):  
     
     """Train decoders on x-base signal (and on projected one if indicated) to 
     predict a 1D y-signal.
@@ -179,8 +179,8 @@ def decoders_1D(x_base_signal = None, y_signal_list=None, emb_list = [], nn = No
                     train_pred = model_decoder.predict(X_train[emb_idx])[:,0]
                     test_pred = model_decoder.predict(X_test[emb_idx])[:,0]
                     #check errors
-                    test_error = median_absolute_error(Y_test[y_idx][:,0], test_pred)
-                    train_error = median_absolute_error(Y_train[y_idx][:,0], train_pred)
+                    test_error = metrics[metric](Y_test[y_idx][:,0], test_pred)
+                    train_error = metrics[metric](Y_train[y_idx][:,0], train_pred)
                     #store results
                     R2s[emb][decoder_name][kfold_idx,y_idx,0] = test_error
                     R2s[emb][decoder_name][kfold_idx,y_idx,1] = train_error

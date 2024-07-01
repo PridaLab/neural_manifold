@@ -4,10 +4,17 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 from sklearn.metrics import pairwise_distances
+import os, pickle, copy
+from sklearn.metrics import median_absolute_error
+import scipy.stats as stats
 
-#Manifold size
 def get_signal(pd_struct, field_name):
     return copy.deepcopy(np.concatenate(pd_struct[field_name].values, axis=0))
+
+def load_pickle(path,name):
+    with open(os.path.join(path, name), 'rb') as sf:
+        data = pickle.load(sf)
+    return data
 
 palette_deepsup = ["#cc9900ff", "#9900ffff"]
 palette_deepsup_strain = ["#f5b800ff", "#b48700ff", "#9900ffff"]
@@ -105,9 +112,9 @@ cues_pd = pd.DataFrame(data={'layer': layer_list,
 
 fig, ax = plt.subplots(1, 1, figsize=(6,6))
 sns.boxplot(x='layer', y='diff_cue', data=cues_pd,
-            palette = palette, linewidth = 1, width= .5, ax = ax)
+            palette = palette_deepsup, linewidth = 1, width= .5, ax = ax)
 sns.scatterplot(x='layer', y='diff_cue', data=cues_pd,
-            palette = palette, ax = ax)
+            palette = palette_deepsup, ax = ax)
 ax.set_ylim([-0.25, 0.25])
 
 x = cues_pd['layer'].to_list()*2
@@ -274,20 +281,20 @@ cues_pd = pd.DataFrame(data={'layer': layer_list,
                      'all_umap': all_umap_list
                      })
 
-cues_pd['diff_cue_traces'] = cues_pd['in_cue_traces']/cues_pd['all_traces']
-cues_pd['diff_cue_umap'] = cues_pd['in_cue_umap']/cues_pd['all_umap']
+cues_pd['diff_cue_traces'] = cues_pd['in_cue_traces']-cues_pd['out_cue_umap']
+cues_pd['diff_cue_umap'] = cues_pd['in_cue_umap']-cues_pd['out_cue_umap']
 
 fig, ax = plt.subplots(1, 2, figsize=(6,6))
 sns.boxplot(x='layer', y='diff_cue_traces', data=cues_pd,
-            palette = palette, linewidth = 1, width= .5, ax = ax[0])
+            palette = palette_deepsup, linewidth = 1, width= .5, ax = ax[0])
 sns.scatterplot(x='layer', y='diff_cue_umap', data=cues_pd,
-            palette = palette, ax = ax[0])
+            palette = palette_deepsup, ax = ax[0])
 
 
 sns.boxplot(x='layer', y='diff_cue_umap', data=cues_pd,
-            palette = palette, linewidth = 1, width= .5, ax = ax[1])
+            palette = palette_deepsup, linewidth = 1, width= .5, ax = ax[1])
 sns.scatterplot(x='layer', y='diff_cue_umap', data=cues_pd,
-            palette = palette, ax = ax[1])
+            palette = palette_deepsup, ax = ax[1])
 
 
 fig, ax = plt.subplots(1, 2, figsize=(6,6))
@@ -338,6 +345,7 @@ betti_dir = '/home/julio/Documents/SP_project/Fig2/betti_numbers/og_mi_cells'
 
 decoders_dir = '/home/julio/Documents/SP_project/Fig2/decoders'
 dec_R2s = load_pickle(decoders_dir, 'dec_R2s_dict.pkl')
+dec_pred = load_pickle(decoders_dir, 'dec_pred_dict.pkl')
 
 mi_dir = '/home/julio/Documents/SP_project/Fig2/mutual_info/'
 mi_scores_dict = load_pickle(mi_dir, 'mi_scores_sep_dict.pkl')
@@ -348,6 +356,8 @@ eccentricity_dict = load_pickle(eccentricity_dir, 'ellipse_fit_dict.pkl')
 
 mae_umap_list = list()
 mae_traces_list = list()
+mae_no_edges_umap_list = list()
+mae_no_edges_traces_list = list()
 mi_list = list()
 eccentricity_list = list()
 h1_lifetime_list = list()
@@ -356,7 +366,9 @@ strain_list = list()
 layer_list = list()
 num_cells_list = list()
 decoder = 'xgb'
+
 decoder_idx = 2
+label_idx = 0
 
 
 for mouse in mouse_list:
@@ -375,6 +387,19 @@ for mouse in mouse_list:
     #decoder data
     mae_traces_list.append(np.mean(dec_R2s[mouse]['base_signal'][decoder][:,0,0], axis=0))
     mae_umap_list.append(np.mean(dec_R2s[mouse]['umap'][decoder][:,0,0], axis=0))
+
+    #decoder data no edges
+    test = dec_pred[mouse][label_idx][decoder_idx][:,:,0].reshape(-1,1) == 1
+    ground_truth = dec_pred[mouse][label_idx][decoder_idx][:,:,1].reshape(-1,1)[test]
+    og_pred = dec_pred[mouse][label_idx][decoder_idx][:,:,2].reshape(-1,1)[test]
+    umap_pred = dec_pred[mouse][label_idx][decoder_idx][:,:,-1].reshape(-1,1)[test]
+
+    track_length = np.max(ground_truth) - np.min(ground_truth)
+    min_x = 0.1*track_length+np.min(ground_truth)
+    max_x = 0.9*track_length+np.min(ground_truth)
+    within_edges = np.logical_and(ground_truth>=min_x,ground_truth<=max_x)
+    mae_no_edges_traces_list.append(median_absolute_error(ground_truth[within_edges], og_pred[within_edges]))
+    mae_no_edges_umap_list.append(median_absolute_error(ground_truth[within_edges], umap_pred[within_edges]))
 
     #num cells
     mouse_pd = load_pickle(path.join(data_dir, mouse),mouse+'_df_dict.pkl')
@@ -395,7 +420,7 @@ for mouse in mouse_list:
     h1_lifetime_list.append((h1_length[-1]-second_length))
 
     #mutual info
-    mi_list.append(np.sum(mi_scores_dict[mouse]['mi_scores'][0,:]))
+    mi_list.append(np.mean(mi_scores_dict[mouse]['mi_scores'][0,:]))
 
 
     #eccentricity
@@ -411,6 +436,10 @@ decoder_pd = pd.DataFrame(data={'layer': layer_list,
                      'mouse': mouse_list,
                      'mae_umap': mae_umap_list,
                      'mae_traces': mae_traces_list,
+
+                     'mae_no_edges_umap': mae_no_edges_umap_list,
+                     'mae_no_edges_traces': mae_no_edges_traces_list,
+
                      'num_cells': num_cells_list,
                      'h1_lifetime': h1_lifetime_list,
                      'mi': mi_list,
@@ -463,6 +492,50 @@ plt.savefig(os.path.join(decoders_dir,'deepsup_decoderx_scatter.svg'), dpi = 400
 plt.savefig(os.path.join(decoders_dir,'deepsup_decoderx_scatter.png'), dpi = 400,bbox_inches="tight")
 
 
+
+fig, ax = plt.subplots(1,4,figsize=(15,5))
+sns.scatterplot(data=decoder_pd, y='mae_no_edges_umap', x='num_cells', hue='layer',
+    palette = palette_deepsup, style='strain', ax= ax[0])
+slope, intercept, r_value, p_value, std_err = stats.linregress(decoder_pd["num_cells"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+s = stats.pearsonr(decoder_pd["num_cells"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+ax[0].plot([decoder_pd["num_cells"].min(),decoder_pd["num_cells"].max()], 
+    [slope*decoder_pd["num_cells"].min()+intercept, slope*decoder_pd["num_cells"].max()+intercept], 'k--')
+ax[0].set_title(f'pearsonr: stat={s[0]:.4f} p={s[1]:.4f}')
+
+sns.scatterplot(data=decoder_pd, y='mae_no_edges_umap', x='mi', hue='layer',
+    palette = palette_deepsup, style='strain', ax= ax[1])
+slope, intercept, r_value, p_value, std_err = stats.linregress(decoder_pd["mi"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+s = stats.pearsonr(decoder_pd["mi"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+ax[1].plot([decoder_pd["mi"].min(),decoder_pd["mi"].max()], 
+    [slope*decoder_pd["mi"].min()+intercept, slope*decoder_pd["mi"].max()+intercept], 'k--')
+ax[1].set_title(f'pearsonr: stat={s[0]:.4f} p={s[1]:.4f}')
+
+sns.scatterplot(data=decoder_pd, y='mae_no_edges_umap', x='h1_lifetime', hue='layer',
+    palette = palette_deepsup, style='strain', ax= ax[2])
+slope, intercept, r_value, p_value, std_err = stats.linregress(decoder_pd["h1_lifetime"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+s = stats.pearsonr(decoder_pd["h1_lifetime"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+ax[2].plot([decoder_pd["h1_lifetime"].min(),decoder_pd["h1_lifetime"].max()], 
+    [slope*decoder_pd["h1_lifetime"].min()+intercept, slope*decoder_pd["h1_lifetime"].max()+intercept], 'k--')
+ax[2].set_title(f'pearsonr: stat={s[0]:.4f} p={s[1]:.4f}')
+
+sns.scatterplot(data=decoder_pd, y='mae_no_edges_umap', x='eccentricity', hue='layer',
+    palette = palette_deepsup, style='strain', ax= ax[3])
+slope, intercept, r_value, p_value, std_err = stats.linregress(decoder_pd["eccentricity"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+s = stats.pearsonr(decoder_pd["eccentricity"].to_list(),decoder_pd["mae_no_edges_umap"].to_list())
+ax[3].plot([decoder_pd["eccentricity"].min(),decoder_pd["eccentricity"].max()], 
+    [slope*decoder_pd["eccentricity"].min()+intercept, slope*decoder_pd["eccentricity"].max()+intercept], 'k--')
+ax[3].set_title(f'pearsonr: stat={s[0]:.4f} p={s[1]:.4f}')
+
+plt.savefig(os.path.join(decoders_dir,'deepsup_decoderx_scatter_no_edges.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(decoders_dir,'deepsup_decoderx_scatter_no_edges.png'), dpi = 400,bbox_inches="tight")
+
+
+
+
+
+
+
+
 for label_idx, label_name in enumerate(label_list):
 
     fig, ax = plt.subplots(1,4,figsize=(15,5))
@@ -496,8 +569,6 @@ temp_pd = temp_pd[temp_pd["mouse"]!="CZ9"]
 
 
 fig, ax = plt.subplots(1,4,figsize=(15,5))
-
-
 sns.scatterplot(data=temp_pd, y='mae_umap', x='h1_lifetime', hue='layer',
     palette = palette_deepsup, style='strain', ax= ax[0])
 slope, intercept, r_value, p_value, std_err = stats.linregress(temp_pd["h1_lifetime"].to_list(),temp_pd["mae_umap"].to_list())
@@ -505,9 +576,6 @@ s = stats.pearsonr(temp_pd["h1_lifetime"].to_list(),temp_pd["mae_umap"].to_list(
 ax[0].plot([temp_pd["h1_lifetime"].min(),temp_pd["h1_lifetime"].max()], 
     [slope*temp_pd["h1_lifetime"].min()+intercept, slope*temp_pd["h1_lifetime"].max()+intercept], 'k--')
 ax[0].set_title(f'pearsonr: stat={s[0]:.4f} p={s[1]:.4f}')
-
-
-
 
 sns.scatterplot(data=temp_pd, y='mae_umap', x='h1_lifetime', hue='layer',
     palette = palette_deepsup, style='strain', ax= ax[0])

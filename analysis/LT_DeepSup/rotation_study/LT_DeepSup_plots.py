@@ -29,8 +29,9 @@ def personalize_ax(ax, ax_view = None):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_zticks([])
+    if len(ax_view)==2: ax_view += [0]
     if ax_view:
-        ax.view_init(ax_view[0], ax_view[1])
+        ax.view_init(ax_view[0], ax_view[1], ax_view[2])
 
 
 supMice = ['CZ3', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
@@ -406,9 +407,9 @@ mouseExamples = {
 
 examplesValues = {
     'supIter': 1,
-    'supAngle': [43,-108], #[-133,-57]
+    'supAngle': [169, 111,30], #[43,-108], #[-133,-57]
     'supLims': [0.4, 0.65],
-    'deepAngle': [-133,125],#[55,65], #[16,-20]
+    'deepAngle': [-133,125,0],#[55,65], #[16,-20]
     'deepIter': 1,
     'deepLims': [0.45, 0.55]
 }
@@ -1549,7 +1550,7 @@ for mouse in supMice:
     animalPre= copy.deepcopy(animal[fnamePre])
     animalRot= copy.deepcopy(animal[fnameRot])
 
-    a = np.argsort(np.abs(remRotDict['rotAngle'].flatten('F')))[::-1]
+    a = np.argsort(np.abs(remRotDict['rotAngle'].flatten('F')))[1080:]#[::-1]
     index = np.unravel_index(a, remRotDict['rotAngle'].shape, 'F')
 
     for x in range(10):
@@ -1561,9 +1562,11 @@ for mouse in supMice:
         dirMatRot = copy.deepcopy(np.concatenate(animalRot['dir_mat'].values, axis=0))
         embRot = copy.deepcopy(np.concatenate(animalRot['umap'].values, axis=0))
 
-        embPre0 = remRotDict['embPreSave'][(index[0][x],index[1][x])]
-        embRot0 = remRotDict['embRotSave'][(index[0][x],index[1][x])]
+        # embPre0 = remRotDict['embPreSave'][(index[0][x],index[1][x])]
+        # embRot0 = remRotDict['embRotSave'][(index[0][x],index[1][x])]
 
+        embPre0 = remRotDict['embPreSave'][(x,100)]
+        embRot0 = remRotDict['embRotSave'][(x,100)]
 
         DPre = pairwise_distances(embPre0)
         noiseIdxPre = filter_noisy_outliers(embPre0,DPre)
@@ -1720,8 +1723,8 @@ ax.scatter(*embRot0[:,:3].T, c = posRot[:,0], cmap='inferno',s = 10)
 personalize_ax(ax, [-3,-57])
 fig.suptitle(mouse)
 plt.tight_layout()
-plt.savefig(os.path.join(dataDir,mouse+'_remAloCells_emb.svg'), dpi = 400,bbox_inches="tight")
-plt.savefig(os.path.join(dataDir,mouse+'_remAloCells_emb.png'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(dataDirPC,mouse+'_remAloCells_emb_v2.svg'), dpi = 400,bbox_inches="tight")
+plt.savefig(os.path.join(dataDirPC,mouse+'_remAloCells_emb_v2.png'), dpi = 400,bbox_inches="tight")
 
 
 #######################

@@ -48,6 +48,9 @@ def tic():
     # Records a time in TicToc, marks the beginning of a time interval
     toc(False)
 
+def get_signal(pd_struct, signal):
+    return copy.deepcopy(np.concatenate(pd_mouse[signal].values, axis=0))
+
 
 #__________________________________________________________________________
 #|                                                                        |#
@@ -56,13 +59,12 @@ def tic():
 
 mice_list = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 data_dir =  '/home/julio/Documents/SP_project/Fig2/processed_data/'
-save_dir = '/home/julio/Documents/SP_project/Fig2/ncells/'
+save_dir = '/home/julio/Documents/SP_project/Fig2/npoints/'
 
-min_cells = 10
-max_cells = 300
+min_points = 500
+max_points = 7500
 n_steps = 8
 n_splits = 10
-max_dim = 10
 
 
 for mouse in mice_list:
@@ -73,27 +75,27 @@ for mouse in mice_list:
     pd_mouse = load_pickle(file_path,file_name)
 
     results = {'params': {
-        'min_cells' : min_cells,
-        'max_cells' : max_cells,
+        'min_points' : min_points,
+        'max_points' :max_points,
         'n_steps' : n_steps,
-        'n_splits' : max_dim
+        'n_splits' : n_splits
     }}
 
     umap_embds = {}
 
     #signal
-    signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)
-    pos = copy.deepcopy(np.concatenate(pd_mouse['pos'].values, axis=0))
-    dir_mat = copy.deepcopy(np.concatenate(pd_mouse['dir_mat'].values, axis=0))
-    vel = copy.deepcopy(np.concatenate(pd_mouse['vel'].values, axis=0))
-    trial = copy.deepcopy(np.concatenate(pd_mouse['index_mat'].values, axis=0))
+    signal = get_signal(pd_mouse,'clean_traces')
+    pos = get_signal(pd_mouse,'pos')
+    dir_mat = get_signal(pd_mouse,'dir_mat')
+    vel = get_signal(pd_mouse,'vel')
+    trial = get_signal(pd_mouse,'index_mat')
 
-    num_cells = signal.shape[1]
-    cell_list = np.unique(np.logspace(np.log10(min_cells), np.log10(max_cells),n_steps,dtype=int))
-    results['params']["og_num_cells"] = cell_list
-    cell_list = cell_list[cell_list<=num_cells]
-    results['params']["cell_list"] = cell_list
-    cells_picked_list = np.zeros((n_steps,n_splits,num_cells)).astype(bool)
+    num_points = signal.shape[0]
+    npoints_list = np.unique(np.logspace(np.log10(min_points), np.log10(max_points),n_steps,dtype=int))
+    results['params']["og_npoints"] = npoints_list
+    npoints_list = npoints_list[npoints_list<=num_points]
+    results['params']["npoints_list"] = npoints_list
+    points_picked_list = np.zeros((n_steps,n_splits,num_points)).astype(bool)
 
 
     inner_dim = {
@@ -106,21 +108,6 @@ for mouse in mice_list:
             'verbose': False
         }
     }
-
-    # umap_dim = {
-    #     'trustNum': np.zeros((n_steps, n_splits,max_dim))*np.nan,
-    #     'contNum': np.zeros((n_steps, n_splits,max_dim))*np.nan,
-    #     'trustDim': np.zeros((n_steps, n_splits))*np.nan,
-    #     'contDim': np.zeros((n_steps, n_splits))*np.nan,
-    #     'hmeanDim': np.zeros((n_steps, n_splits))*np.nan,
-    #     'params': {
-    #         'maxDim':10,
-    #         'nNeigh': 120,
-    #         'minDist': 0.1,
-    #         'nnDim': 30,
-    #         'signalName': 'clean_traces'
-    #     }
-    # }
 
     si_temp = {
         'pos': {
@@ -153,7 +140,6 @@ for mouse in mice_list:
             'numShuffles': 0
         }
     }
-    SI_dict['params']['nNeigh'] = np.round(SI_dict['params']['nNeigh_perc']*signal.shape[0]).astype(int)
     dec_params = {
         'x_base_signal': 'clean_traces',
         'y_signal_list': ['posx', 'vel'],
@@ -173,114 +159,82 @@ for mouse in mice_list:
         'params': dec_params
     }
 
-    for ncell_idx, ncell_val in enumerate(cell_list):
-        print(f"\nChecking number of cells {ncell_val} ({ncell_idx+1}/{n_steps}):")
+    for npoint_idx, npoint_val in enumerate(npoints_list):
+        print(f"\nChecking number of points {npoint_val} ({npoint_idx+1}/{n_steps}):")
         print("\tIteration X/X", sep= '', end = '')
         pre_del = '\b\b\b'
+        SI_dict['params']['nNeigh'] = np.max([np.round(SI_dict['params']['nNeigh_perc']*npoint_val).astype(int), 15])
+
         for split_idx in range(n_splits):
             print(pre_del, f"{split_idx+1}/{n_splits}", sep = '', end = '')
             pre_del = (len(str(split_idx+1))+len(str(n_splits))+1)*"\b"
 
-            cells_picked = random.sample(list(np.arange(num_cells).astype(int)), ncell_val)
-            cells_picked_list[ncell_idx, split_idx, cells_picked] = True 
-            it_signal = copy.deepcopy(signal[:, cells_picked])
+            points_picked = random.sample(list(np.arange(num_points).astype(int)), npoint_val)
+            points_picked_list[npoint_idx, split_idx, points_picked] = True 
+            it_signal = copy.deepcopy(signal[points_picked,:])
 
             #compute inner dim
-            inner_dim['abids'][ncell_idx, split_idx] = np.nanmean(dim_red.compute_abids(it_signal, inner_dim['params']['nNeigh'],verbose=False))
-            # inner_dim['mom'][ncell_idx, split_idx] = skdim.id.MOM().fit_transform(it_signal,n_neighbors = inner_dim['params']['nNeigh'])
-            # try:
-            #     inner_dim['tle'][ncell_idx, split_idx] = skdim.id.TLE().fit_transform(it_signal,n_neighbors = inner_dim['params']['nNeigh'])
-            # except:
-            #     inner_dim['tle'][ncell_idx, split_idx] = np.nan
+            inner_dim['abids'][npoint_idx, split_idx] = np.nanmean(dim_red.compute_abids(it_signal, inner_dim['params']['nNeigh'],verbose=False))
 
-            #compute umap dim
-            # rank_idxs = dim_validation.compute_rank_indices(it_signal)
-
-            # for dim in range(umap_dim['params']['maxDim']):
-            #     emb_space = np.arange(dim+1)
-            #     model = umap.UMAP(n_neighbors = umap_dim['params']['nNeigh'], n_components =dim+1, min_dist=umap_dim['params']['minDist'])
-            #     emb = model.fit_transform(it_signal)
-            #     if dim==2:
-            #         it_umap = copy.deepcopy(emb)
-            #     #1. Compute trustworthiness
-            #     temp = dim_validation.trustworthiness_vector(it_signal, emb, umap_dim['params']['nnDim'], indices_source = rank_idxs)
-            #     umap_dim['trustNum'][ncell_idx,split_idx][dim] = temp[-1]
-
-            #     #2. Compute continuity
-            #     temp = dim_validation.continuity_vector(it_signal, emb ,umap_dim['params']['nnDim'])
-            #     umap_dim['contNum'][ncell_idx,split_idx][dim] = temp[-1]
-
-            # dimSpace = np.linspace(1,umap_dim['params']['maxDim'], umap_dim['params']['maxDim']).astype(int)   
             model = umap.UMAP(n_neighbors = 120, n_components =3, min_dist=0.1)
             it_umap = model.fit_transform(it_signal)
 
-            # kl = KneeLocator(dimSpace, umap_dim['trustNum'][ncell_idx,split_idx], curve = "concave", direction = "increasing")
-            # if kl.knee:
-            #     umap_dim['trustDim'][ncell_idx, split_idx] = kl.knee
-            # else:
-            #     umap_dim['trustDim'][ncell_idx, split_idx] = np.nan
-            # kl = KneeLocator(dimSpace, umap_dim['contNum'][ncell_idx,split_idx], curve = "concave", direction = "increasing")
-            # if kl.knee:
-            #     umap_dim['contDim'][ncell_idx, split_idx] = kl.knee
-            # else:
-            #     umap_dim['contDim'][ncell_idx, split_idx] = np.nan
-            # umap_dim['hmeanDim'][ncell_idx, split_idx] = (2*umap_dim['trustDim'][ncell_idx, split_idx]*umap_dim['contDim'][ncell_idx, split_idx])/(umap_dim['trustDim'][ncell_idx, split_idx]+umap_dim['contDim'][ncell_idx, split_idx])
-
 
             #compute SI
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, pos[:,0], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['clean_traces']['pos']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['clean_traces']['pos']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['clean_traces']['pos']['overlapMat'][ncell_idx, split_idx] = toverlapMat
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, pos[points_picked,0], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['clean_traces']['pos']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['clean_traces']['pos']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['clean_traces']['pos']['overlapMat'][npoint_idx, split_idx] = toverlapMat
 
 
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, dir_mat, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['clean_traces']['dir_mat']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['clean_traces']['dir_mat']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['clean_traces']['dir_mat']['overlapMat'][ncell_idx, split_idx] = toverlapMat
-
-            # tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, trial, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            # SI_dict['clean_traces']['time']['sI'][ncell_idx, split_idx] = tSI
-            # SI_dict['clean_traces']['time']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            # SI_dict['clean_traces']['time']['overlapMat'][ncell_idx, split_idx] = toverlapMat
-
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, vel, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['clean_traces']['vel']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['clean_traces']['vel']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['clean_traces']['vel']['overlapMat'][ncell_idx, split_idx] = toverlapMat
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, dir_mat[points_picked], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['clean_traces']['dir_mat']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['clean_traces']['dir_mat']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['clean_traces']['dir_mat']['overlapMat'][npoint_idx, split_idx] = toverlapMat
 
 
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, pos[:,0], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['umap']['pos']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['umap']['pos']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['umap']['pos']['overlapMat'][ncell_idx, split_idx] = toverlapMat
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_signal, vel[points_picked], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['clean_traces']['vel']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['clean_traces']['vel']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['clean_traces']['vel']['overlapMat'][npoint_idx, split_idx] = toverlapMat
 
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, dir_mat, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['umap']['dir_mat']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['umap']['dir_mat']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['umap']['dir_mat']['overlapMat'][ncell_idx, split_idx] = toverlapMat
 
-            # tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, trial, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            # SI_dict['umap']['time']['sI'][ncell_idx, split_idx] = tSI
-            # SI_dict['umap']['time']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            # SI_dict['umap']['time']['overlapMat'][ncell_idx, split_idx] = toverlapMat
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, pos[points_picked,0], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['umap']['pos']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['umap']['pos']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['umap']['pos']['overlapMat'][npoint_idx, split_idx] = toverlapMat
 
-            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, vel, n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
-            SI_dict['umap']['vel']['sI'][ncell_idx, split_idx] = tSI
-            SI_dict['umap']['vel']['binLabel'][ncell_idx, split_idx] = tbinLabel
-            SI_dict['umap']['vel']['overlapMat'][ncell_idx, split_idx] = toverlapMat
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, dir_mat[points_picked], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['umap']['dir_mat']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['umap']['dir_mat']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['umap']['dir_mat']['overlapMat'][npoint_idx, split_idx] = toverlapMat
+
+            tSI, tbinLabel, toverlapMat, _ = compute_structure_index(it_umap, vel[points_picked], n_neighbors=SI_dict['params']['nNeigh'], num_shuffles=SI_dict['params']['numShuffles'], verbose=False)
+            SI_dict['umap']['vel']['sI'][npoint_idx, split_idx] = tSI
+            SI_dict['umap']['vel']['binLabel'][npoint_idx, split_idx] = tbinLabel
+            SI_dict['umap']['vel']['overlapMat'][npoint_idx, split_idx] = toverlapMat
 
 
             #compute decoders
             new_pd_mouse = copy.deepcopy(pd_mouse)
+            st = 0
+            en = 0
+
+            bool_picked = np.zeros((num_points,))==1
+            bool_picked[points_picked] = True
             for idx in range(pd_mouse.shape[0]):
-                new_pd_mouse['clean_traces'][idx] = pd_mouse['clean_traces'][idx][:, cells_picked]
+                en = st + new_pd_mouse['clean_traces'][idx].shape[0]
+                new_pd_mouse['clean_traces'][idx] = pd_mouse['clean_traces'][idx][bool_picked[st:en],:]
+                new_pd_mouse['pos'][idx] = pd_mouse['pos'][idx][bool_picked[st:en],:]
+                new_pd_mouse['vel'][idx] = pd_mouse['vel'][idx][bool_picked[st:en]]
+                new_pd_mouse['index_mat'][idx] = pd_mouse['index_mat'][idx][bool_picked[st:en]]
+                st = en
 
             dec_R2s, _ = dec.decoders_1D(pd_object = copy.deepcopy(new_pd_mouse), **dec_params)
-            dec_dict['clean_traces'][ncell_idx, split_idx,:, :,:] = dec_R2s['base_signal']['xgb']
-            dec_dict['umap'][ncell_idx, split_idx,:, :,:] = dec_R2s['umap']['xgb']
+            dec_dict['clean_traces'][npoint_idx, split_idx,:, :,:] = dec_R2s['base_signal']['xgb']
+            dec_dict['umap'][npoint_idx, split_idx,:, :,:] = dec_R2s['umap']['xgb']
 
-            umap_embds[ncell_idx, split_idx] = it_umap
+            umap_embds[npoint_idx, split_idx] = it_umap
 
 
         results['inner_dim'] = copy.deepcopy(inner_dim)
@@ -288,8 +242,8 @@ for mouse in mice_list:
         results['SI_dict'] = copy.deepcopy(SI_dict)
         results['dec_dict'] = copy.deepcopy(dec_dict)
         results['umap_embds'] = copy.deepcopy(umap_embds)
-        results['params']['cells_picked_list'] = copy.deepcopy(cells_picked_list)
-        save_file = open(os.path.join(save_dir, f'{mouse}_ncells_results_dict.pkl'), "wb")
+        results['params']['points_picked_list'] = copy.deepcopy(points_picked_list)
+        save_file = open(os.path.join(save_dir, f'{mouse}_npoints_results_dict.pkl'), "wb")
         pickle.dump(results, save_file)
         save_file.close()
     print('\n')
@@ -307,8 +261,8 @@ for mouse in mice_list:
 
 
     ncells_dict = load_pickle(save_dir, f'{mouse}_ncells_results_dict.pkl')
-    cell_list = ncells_dict['params']['cell_list']
-    cells_picked_list = ncells_dict['params']['cells_picked_list'] 
+    npoints_list = ncells_dict['params']['npoints_list']
+    points_picked_list = ncells_dict['params']['points_picked_list'] 
     umap_embds = ncells_dict['umap_embds']
 
     n_steps = ncells_dict['params']['n_steps']
@@ -340,17 +294,17 @@ for mouse in mice_list:
     for a in list(dec_dict.keys()):
         dec_dict[a][:,:,:,:2,:] = copy.deepcopy(ncells_dict['dec_dict'][a])
 
-    for ncell_idx, ncell_val in enumerate(cell_list):
-        print(f"\nChecking number of cells {ncell_val} ({ncell_idx+1}/{n_steps}):")
+    for npoint_idx, npoint_val in enumerate(npoints_list):
+        print(f"\nChecking number of cells {npoint_val} ({npoint_idx+1}/{n_steps}):")
         print("\tIteration X/X", sep= '', end = '')
         pre_del = '\b\b\b'
         for split_idx in range(n_splits):
             print(pre_del, f"{split_idx+1}/{n_splits}", sep = '', end = '')
             pre_del = (len(str(split_idx+1))+len(str(n_splits))+1)*"\b"
 
-            cells_picked = cells_picked_list[ncell_idx, split_idx]
+            points_picked = points_picked_list[npoint_idx, split_idx]
 
-            signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)[:, cells_picked]
+            signal = np.concatenate(pd_mouse['clean_traces'].values, axis = 0)[:, points_picked]
             dir_mat = copy.deepcopy(np.concatenate(pd_mouse['dir_mat'].values, axis=0))
             trial = copy.deepcopy(np.concatenate(pd_mouse['index_mat'].values, axis=0))
 
@@ -364,8 +318,8 @@ for mouse in mice_list:
             dec_R2s, _ = dec.decoders_1D(x_base_signal=signal, y_signal_list = [dir_mat], trial_signal = trial, **dec_params)
 
 
-            dec_dict['clean_traces'][ncell_idx, split_idx,:, 2,:] = dec_R2s['base_signal']['svc'][:,0,:]
-            dec_dict['umap'][ncell_idx, split_idx,:, 2,:] = dec_R2s['umap']['svc'][:,0,:]
+            dec_dict['clean_traces'][npoint_idx, split_idx,:, 2,:] = dec_R2s['base_signal']['svc'][:,0,:]
+            dec_dict['umap'][npoint_idx, split_idx,:, 2,:] = dec_R2s['umap']['svc'][:,0,:]
 
 
 
@@ -392,7 +346,7 @@ mice_list = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4', 'ChZ7', 'GC7','ChZ8', '
 data_dir = '/home/julio/Documents/SP_project/Fig2/ncells/'
 
 palette_deepsup = {'deep': "#cc9900ff", 'sup': "#9900ffff"}
-base_cell_list = [ 10,  16,  26,  42,  69, 113, 184, 300]
+base_npoints_list = [ 499,  736, 1083, 1595, 2349, 3459, 5093, 7500]
 
 
 #DEC UMAP
@@ -405,7 +359,7 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
     for mouse in mice_list:
         if label == 'vel' and mouse == 'CZ4': continue;
         ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-        cell_list = ncells_dict['params']['cell_list']
+        npoints_list = ncells_dict['params']['npoints_list']
         val = np.nanmean(ncells_dict['dec_dict']['umap'][:,:,:,idx,0],axis=(1,2))
         if mouse in deep_mice:
             color = palette_deepsup['deep']
@@ -413,12 +367,12 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
         elif mouse in sup_mice:
             color = palette_deepsup['sup']
             sup_vals.append(val)
-        ax.plot(cell_list, val[:len(cell_list)], color = color, alpha = 0.3)
+        ax.plot(npoints_list, val[:len(npoints_list)], color = color, alpha = 0.3)
 
     deep_vals = np.stack(deep_vals,axis=1)
     sup_vals = np.stack(sup_vals,axis=1)
-    ax.plot(base_cell_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
-    ax.plot(base_cell_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
+    ax.plot(base_npoints_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
+    ax.plot(base_npoints_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
     ax.set_xlabel('Num cells')
     if 'pos' in label:
         ax.set_ylabel('posx (cm)')
@@ -444,7 +398,7 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
         if label =='dir_mat' and mouse == 'GC5_nvista': continue;
         if label =='dir_mat' and mouse == 'ChZ4': continue;
         ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-        cell_list = ncells_dict['params']['cell_list']
+        npoints_list = ncells_dict['params']['npoints_list']
         val = np.nanmean(ncells_dict['dec_dict']['clean_traces'][:,:,:,idx,0],axis=(1,2))
         if mouse in deep_mice:
             color = palette_deepsup['deep']
@@ -452,12 +406,12 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
         elif mouse in sup_mice:
             color = palette_deepsup['sup']
             sup_vals.append(val)
-        ax.plot(cell_list, val[:len(cell_list)], color = color, alpha = 0.3)
+        ax.plot(npoints_list, val[:len(npoints_list)], color = color, alpha = 0.3)
 
     deep_vals = np.stack(deep_vals,axis=1)
     sup_vals = np.stack(sup_vals,axis=1)
-    ax.plot(base_cell_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
-    ax.plot(base_cell_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
+    ax.plot(base_npoints_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
+    ax.plot(base_npoints_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
     ax.set_xlabel('Num cells')
     if 'pos' in label:
         ax.set_ylabel('posx (cm)')
@@ -492,9 +446,9 @@ for idx, label in enumerate(['pos','vel']):
             layer_list.append('sup')
 
         ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-        cell_list = ncells_dict['params']['cell_list']
+        npoints_list = ncells_dict['params']['npoints_list']
         val = np.nanmean(ncells_dict['dec_dict']['clean_traces'][:,:,:,idx,0],axis=(1,2))
-        dec_vals.append(val[len(cell_list)-1])
+        dec_vals.append(val[len(npoints_list)-1])
 
     sns.barplot(x = layer_list, y= dec_vals, ax=ax)
 
@@ -530,7 +484,7 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
     for mouse in mice_list:
         if label == 'vel' and mouse == 'CZ4': continue;
         ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-        cell_list = ncells_dict['params']['cell_list']
+        npoints_list = ncells_dict['params']['npoints_list']
         val = np.nanmean(ncells_dict['SI_dict']['umap'][label]['sI'][:,:],axis=1)
         if mouse in deep_mice:
             color = palette_deepsup['deep']
@@ -538,12 +492,12 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
         elif mouse in sup_mice:
             color = palette_deepsup['sup']
             sup_vals.append(val)
-        ax.plot(cell_list, val[:len(cell_list)], color = color, alpha = 0.3)
+        ax.plot(npoints_list, val[:len(npoints_list)], color = color, alpha = 0.3)
 
     deep_vals = np.stack(deep_vals,axis=1)
     sup_vals = np.stack(sup_vals,axis=1)
-    ax.plot(base_cell_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
-    ax.plot(base_cell_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
+    ax.plot(base_npoints_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
+    ax.plot(base_npoints_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
     ax.set_xlabel('Num cells')
 
     ax.set_ylabel(f'SI {label}')
@@ -565,7 +519,7 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
     for mouse in mice_list:
         if label == 'vel' and mouse == 'CZ4': continue;
         ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-        cell_list = ncells_dict['params']['cell_list']
+        npoints_list = ncells_dict['params']['npoints_list']
         val = np.nanmean(ncells_dict['SI_dict']['clean_traces'][label]['sI'][:,:],axis=1)
         if mouse in deep_mice:
             color = palette_deepsup['deep']
@@ -573,12 +527,12 @@ for idx, label in enumerate(['pos','vel', 'dir_mat']):
         elif mouse in sup_mice:
             color = palette_deepsup['sup']
             sup_vals.append(val)
-        ax.plot(cell_list, val[:len(cell_list)], color = color, alpha = 0.3)
+        ax.plot(npoints_list, val[:len(npoints_list)], color = color, alpha = 0.3)
 
     deep_vals = np.stack(deep_vals,axis=1)
     sup_vals = np.stack(sup_vals,axis=1)
-    ax.plot(base_cell_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
-    ax.plot(base_cell_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
+    ax.plot(base_npoints_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
+    ax.plot(base_npoints_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
     ax.set_xlabel('Num cells')
 
     ax.set_ylabel(f'SI {label}')
@@ -601,7 +555,7 @@ deep_vals = []
 sup_vals = []
 for mouse in mice_list:
     ncells_dict = load_pickle(data_dir, f'{mouse}_ncells_results_dict.pkl')
-    cell_list = ncells_dict['params']['cell_list']
+    npoints_list = ncells_dict['params']['npoints_list']
     val = np.nanmean(ncells_dict['inner_dim']['abids'],axis=1)
     if mouse in deep_mice:
         color = palette_deepsup['deep']
@@ -609,12 +563,12 @@ for mouse in mice_list:
     elif mouse in sup_mice:
         color = palette_deepsup['sup']
         sup_vals.append(val)
-    ax.plot(cell_list, val[:len(cell_list)], color = color, alpha = 0.3)
+    ax.plot(npoints_list, val[:len(npoints_list)], color = color, alpha = 0.3)
 
 deep_vals = np.stack(deep_vals,axis=1)
 sup_vals = np.stack(sup_vals,axis=1)
-ax.plot(base_cell_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
-ax.plot(base_cell_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
+ax.plot(base_npoints_list, np.nanmean(deep_vals, axis=1), label = 'deep', linewidth = 3, color = palette_deepsup['deep'])
+ax.plot(base_npoints_list, np.nanmean(sup_vals, axis=1), label = 'sup', linewidth = 3, color = palette_deepsup['sup'])
 ax.set_xlabel('Num cells')
 
 ax.set_ylabel('ABID dim')
@@ -624,7 +578,6 @@ ax.legend()
 plt.suptitle('Traces')
 plt.savefig(os.path.join(data_dir,'nCells_inner_dim_ABID.svg'), dpi = 400,bbox_inches="tight")
 plt.savefig(os.path.join(data_dir,'nCells_inner_dim_ABID.png'), dpi = 400,bbox_inches="tight")
-
 
 
 
@@ -658,9 +611,9 @@ for mouse in mice_list:
             dir_color[point] = [12/255,136/255,249/255]
         else:
             dir_color[point] = [17/255,219/255,224/255]
-    for ncell_idx in range(8):
+    for npoint_idx in range(8):
         for split_idx in range(10):
-            umap_emb = copy.deepcopy(ncells_dict['umap_embds'][(ncell_idx,split_idx)])
+            umap_emb = copy.deepcopy(ncells_dict['umap_embds'][(npoint_idx,split_idx)])
 
             fig = plt.figure(figsize=(8,8))
             ax = plt.subplot(1,1,1, projection = '3d')
@@ -674,8 +627,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_zticks([])
             ax.set_aspect('equal')
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -687,8 +640,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir_xy.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir_xy.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir_xy.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir_xy.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -700,8 +653,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir_xz.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_dir_xz.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir_xz.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_dir_xz.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -717,8 +670,8 @@ for mouse in mice_list:
             ax.set_zticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -730,8 +683,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos_xy.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos_xy.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos_xy.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos_xy.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -743,8 +696,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos_xz.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_pos_xz.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos_xz.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_pos_xz.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -759,8 +712,8 @@ for mouse in mice_list:
             ax.set_zticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -772,8 +725,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time_xy.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time_xy.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time_xy.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time_xy.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
             fig = plt.figure(figsize=(8,8))
@@ -785,8 +738,8 @@ for mouse in mice_list:
             ax.set_yticks([])
             ax.set_aspect('equal')
 
-            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time_xz.svg'), dpi = 400,bbox_inches="tight")
-            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{ncell_idx}_{split_idx}_time_xz.png'), dpi = 400,bbox_inches="tight")
+            #plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time_xz.svg'), dpi = 400,bbox_inches="tight")
+            plt.savefig(os.path.join(save_dir,f'{mouse}_umap_emb_{npoint_idx}_{split_idx}_time_xz.png'), dpi = 400,bbox_inches="tight")
             plt.close(fig)
 
-            
+

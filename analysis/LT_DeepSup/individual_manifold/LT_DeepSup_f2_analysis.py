@@ -525,6 +525,7 @@ saveParamsFile.close()
 #|                                                                        |#
 #|                                 PCA DIM                                |#
 #|________________________________________________________________________|#
+
 miceList = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
 params = {
     'signalName': 'clean_traces',
@@ -1244,6 +1245,223 @@ for mouse in miceList:
         pickle.dump(dec_pred, f)
     with open(os.path.join(saveDir,'dec_params.pkl'), 'wb') as f:
         pickle.dump(params, f)
+
+
+
+#__________________________________________________________________________
+#|                                                                        |#
+#|                        DECODERS ACROSS ANIMALS                         |#
+#|________________________________________________________________________|#
+from neural_manifold.decoders.decoder_classes import DECODERS  #decoders classes
+from sklearn.metrics import median_absolute_error
+
+
+def get_centroids(input_A, input_B, label_A, label_B, dir_A = None, dir_B = None, ndims = 2, nCentroids = 20):
+    input_A = input_A[:,:ndims]
+    input_B = input_B[:,:ndims]
+    if label_A.ndim>1:
+        label_A = label_A[:,0]
+    if label_B.ndim>1:
+        label_B = label_B[:,0]
+    #compute label max and min to divide into centroids
+    total_label = np.hstack((label_A, label_B))
+    labelLimits = np.array([(np.percentile(total_label,5), np.percentile(total_label,95))]).T[:,0] 
+    #find centroid size
+    centSize = (labelLimits[1] - labelLimits[0]) / (nCentroids)
+    #define centroid edges a snp.ndarray([lower_edge, upper_edge])
+    centEdges = np.column_stack((np.linspace(labelLimits[0],labelLimits[0]+centSize*(nCentroids),nCentroids),
+                                np.linspace(labelLimits[0],labelLimits[0]+centSize*(nCentroids),nCentroids)+centSize))
+
+    if isinstance(dir_A, type(None)) or isinstance(dir_B, type(None)):
+        centLabel_A = np.zeros((nCentroids,ndims))
+        centLabel_B = np.zeros((nCentroids,ndims))
+        
+        ncentLabel_A = np.zeros((nCentroids,))
+        ncentLabel_B = np.zeros((nCentroids,))
+        for c in range(nCentroids):
+            points_A = input_A[np.logical_and(label_A >= centEdges[c,0], label_A<centEdges[c,1]),:]
+            centLabel_A[c,:] = np.median(points_A, axis=0)
+            ncentLabel_A[c] = points_A.shape[0]
+            
+            points_B = input_B[np.logical_and(label_B >= centEdges[c,0], label_B<centEdges[c,1]),:]
+            centLabel_B[c,:] = np.median(points_B, axis=0)
+            ncentLabel_B[c] = points_B.shape[0]
+    else:
+        input_A_left = copy.deepcopy(input_A[dir_A[:,0]==1,:])
+        label_A_left = copy.deepcopy(label_A[dir_A[:,0]==1])
+        input_A_right = copy.deepcopy(input_A[dir_A[:,0]==2,:])
+        label_A_right = copy.deepcopy(label_A[dir_A[:,0]==2])
+        
+        input_B_left = copy.deepcopy(input_B[dir_B[:,0]==1,:])
+        label_B_left = copy.deepcopy(label_B[dir_B[:,0]==1])
+        input_B_right = copy.deepcopy(input_B[dir_B[:,0]==2,:])
+        label_B_right = copy.deepcopy(label_B[dir_B[:,0]==2])
+        
+        centLabel_A = np.zeros((2*nCentroids,ndims))
+        centLabel_B = np.zeros((2*nCentroids,ndims))
+        ncentLabel_A = np.zeros((2*nCentroids,))
+        ncentLabel_B = np.zeros((2*nCentroids,))
+        
+        for c in range(nCentroids):
+            points_A_left = input_A_left[np.logical_and(label_A_left >= centEdges[c,0], label_A_left<centEdges[c,1]),:]
+            centLabel_A[2*c,:] = np.median(points_A_left, axis=0)
+            ncentLabel_A[2*c] = points_A_left.shape[0]
+            points_A_right = input_A_right[np.logical_and(label_A_right >= centEdges[c,0], label_A_right<centEdges[c,1]),:]
+            centLabel_A[2*c+1,:] = np.median(points_A_right, axis=0)
+            ncentLabel_A[2*c+1] = points_A_right.shape[0]
+
+            points_B_left = input_B_left[np.logical_and(label_B_left >= centEdges[c,0], label_B_left<centEdges[c,1]),:]
+            centLabel_B[2*c,:] = np.median(points_B_left, axis=0)
+            ncentLabel_B[2*c] = points_B_left.shape[0]
+            points_B_right = input_B_right[np.logical_and(label_B_right >= centEdges[c,0], label_B_right<centEdges[c,1]),:]
+            centLabel_B[2*c+1,:] = np.median(points_B_right, axis=0)
+            ncentLabel_B[2*c+1] = points_B_right.shape[0]
+
+    del_cent_nan = np.all(np.isnan(centLabel_A), axis= 1)+ np.all(np.isnan(centLabel_B), axis= 1)
+    del_cent_num = (ncentLabel_A<20) + (ncentLabel_B<20)
+    del_cent = del_cent_nan + del_cent_num
+    
+    centLabel_A = np.delete(centLabel_A, del_cent, 0)
+    centLabel_B = np.delete(centLabel_B, del_cent, 0)
+
+    return centLabel_A, centLabel_B
+
+
+def get_point_registration(p1, p2, verbose=True):
+    #from https://stackoverflow.com/questions/66923224/rigid-registration-of-two-point-clouds-with-known-correspondence
+    if p1.shape[0]>p1.shape[1]:
+        p1 = p1.transpose()
+        p2 = p2.transpose()
+    #Calculate centroids
+    p1_c = np.nanmedian(p1, axis = 1).reshape((-1,1)) #If you don't put reshape then the outcome is 1D with no rows/colums and is interpeted as rowvector in next minus operation, while it should be a column vector
+    p2_c = np.nanmedian(p2, axis = 1).reshape((-1,1))
+    #Subtract centroids
+    q1 = p1-p1_c
+    q2 = p2-p2_c
+    #Calculate covariance matrix
+    H=np.matmul(q1,q2.transpose())
+    #Calculate singular value decomposition (SVD)
+    try:
+        U, X, V_t = np.linalg.svd(H) #the SVD of linalg gives you Vt
+        #Calculate rotation matrix
+        R = np.matmul(V_t.transpose(),U.transpose())
+        if not np.allclose(np.linalg.det(R), 1.0) and verbose:
+            print("Rotation matrix of N-point registration not 1, see paper Arun et al.")
+        #Calculate translation matrix
+        T = p2_c - np.matmul(R,p1_c)
+    except:
+        R = np.zeros((p1.shape[0], p1.shape[0]))*np.nan
+        T = np.zeros((p1.shape[0], 1))
+    return T,R
+
+
+mice_list = ['GC2','GC3','GC5_nvista', 'TGrin1', 'ChZ4','ChZ7', 'ChZ8', 'GC7','CZ3', 'CZ4', 'CZ6', 'CZ8', 'CZ9', 'CGrin1']
+data_dir = '/home/julio/Documents/SP_project/Fig2/processed_data/'
+save_dir = '/home/julio/Documents/SP_project/Fig2/decoders/'
+
+params = {
+    'x_base_signal': 'clean_traces',
+    'y_signal_list': ['posx', 'vel', 'dir_mat'],
+    'verbose': True,
+    'trial_signal': 'index_mat',
+    'n_splits': 10,
+    'n_dims': 3,
+    'emb_list': ['pca', 'isomap', 'umap'],
+    'decoder_list': ["wf", "wc", "xgb", "svr"]
+    }
+
+
+for mouse_A in mice_list:
+    fileName =  mouse_A+'_df_dict.pkl'
+    filePath_A = os.path.join(data_dir, mouse_A)
+    pdMouse_A = gu.load_files(filePath_A,'*'+mouse_A+'_df_dict.pkl',verbose=True,struct_type="pickle")
+
+    y_signal_list_A = list()
+    for y_signal in params['y_signal_list']:
+        y_signal_list_A.append(gu.pd_to_array_translator(pdMouse_A, y_signal).reshape(-1,1))
+
+    x_signal_list_A = list()
+    for emb_signal in params['emb_list']:
+        x_signal_list_A.append(gu.pd_to_array_translator(pdMouse_A, emb_signal)[:,:3])
+
+    cross_dec_R2s = dict()
+    cross_dec_Rmat = dict()
+    #train all decoders for all signals and all y_labels
+    print(f"Training decoders for mouse: {mouse_A}")
+    decoder_objects = dict()
+    for x_idx, x_signal in enumerate(params['emb_list']):
+        for y_idx, y_signal in enumerate(params['y_signal_list']):
+            for dec_name in params['decoder_list']:
+                model_decoder = copy.deepcopy(DECODERS[dec_name]())
+                model_decoder.fit(x_signal_list_A[x_idx], y_signal_list_A[y_idx])
+                decoder_objects[f"({x_signal},{y_signal},{dec_name})"] = copy.deepcopy(model_decoder)
+
+    for mouse_B in mice_list:
+        if mouse_B == mouse_A: continue;
+        print(f"\n******* {mouse_A} vs {mouse_B} *******")
+        filePath_B = os.path.join(data_dir, mouse_B)
+        pdMouse_B = gu.load_files(filePath_B,'*'+mouse_B+'_df_dict.pkl',verbose=True,struct_type="pickle")
+        y_signal_list_B = list()
+        for y_signal in params['y_signal_list']:
+            y_signal_list_B.append(gu.pd_to_array_translator(pdMouse_B, y_signal).reshape(-1,1))
+
+        x_signal_list_B = list()        
+        for emb_signal in params['emb_list']:
+            x_signal_list_B.append(gu.pd_to_array_translator(pdMouse_B, emb_signal)[:,:3])
+
+        R2s = dict()
+        Rot_sol = dict()
+        for emb_signal in params['emb_list']:
+            R2s[emb_signal] = dict()
+            for dec_name in params['decoder_list']:
+                R2s[emb_signal][dec_name] = np.zeros((len(y_signal_list_A),2))
+
+        #pre alignment
+        for x_idx, x_signal in enumerate(params['emb_list']):
+            for y_idx, y_signal in enumerate(params['y_signal_list']):
+                for dec_name in params['decoder_list']:
+                    model_decoder = copy.deepcopy(decoder_objects[f"({x_signal},{y_signal},{dec_name})"])
+                    pred_B = model_decoder.predict(x_signal_list_B[x_idx])
+
+                    test_error = median_absolute_error(y_signal_list_B[y_idx][:,0], pred_B[:,0])
+                    #store results
+                    R2s[x_signal][dec_name][y_idx,0] = test_error
+
+        #after alignment
+        for x_idx, x_signal in enumerate(params['emb_list']):
+            cent_A, cent_B = get_centroids(x_signal_list_A[x_idx], x_signal_list_B[x_idx], 
+                                                y_signal_list_A[0], y_signal_list_B[0],
+                                                y_signal_list_A[-1], y_signal_list_B[-1], 
+                                                ndims = 3, nCentroids = 40)
+            T,R = get_point_registration(cent_B, cent_A)
+
+            Rot_sol[x_signal] = {
+                'R': R,
+                'T': T,
+                'emb_A': x_signal_list_A[x_idx],
+                'emb_B': x_signal_list_B[x_idx],
+                'label_A': y_signal_list_A[0],
+                'label_B': y_signal_list_B[0]
+            }
+
+            emb_BA_rot = np.transpose(T + np.matmul(R, x_signal_list_B[x_idx].T))
+            for y_idx, y_signal in enumerate(params['y_signal_list']):
+                for dec_name in params['decoder_list']:
+                    model_decoder = copy.deepcopy(decoder_objects[f"({x_signal},{y_signal},{dec_name})"])
+                    pred_B = model_decoder.predict(emb_BA_rot)
+                    test_error = median_absolute_error(y_signal_list_B[y_idx][:,0], pred_B[:,0])
+                    #store results
+                    R2s[x_signal][dec_name][y_idx,1] = test_error
+
+        cross_dec_R2s[f"({mouse_A},{mouse_B})"] = copy.deepcopy(R2s)
+        cross_dec_Rmat[f"({mouse_A},{mouse_B})"] = copy.deepcopy(Rot_sol)
+
+        with open(os.path.join(save_dir,f'{mouse_A}_cross_dec_R2s_dict.pkl'), 'wb') as f:
+            pickle.dump(cross_dec_R2s, f)
+        with open(os.path.join(save_dir,f'{mouse_A}_cross_dec_Rmat_dict.pkl'), 'wb') as f:
+            pickle.dump(cross_dec_Rmat, f)
+        with open(os.path.join(save_dir,f'{mouse_A}_cross_dec_params.pkl'), 'wb') as f:
+            pickle.dump(params, f)
 
 
 

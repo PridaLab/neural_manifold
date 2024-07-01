@@ -316,7 +316,81 @@ class SVRegression(object):
             model=self.model[y_idx] #Get fit model for that output
             y_test_predicted[:,y_idx]=model.predict(X_flat_test) #Make predictions
         return y_test_predicted
+
+
+##################### SUPPORT VECTOR CLASSIFICATION ##########################
+#Copied from https://github.com/KordingLab/Neural_Decoding (19/10/2021)
+@register
+class SVClassification(object):
     
+    """
+    Class for the Support Vector Classification (SVC) Decoder
+    This simply leverages the scikit-learn SVC
+
+    Parameters
+    ----------
+    C: float, default=3.0
+        Penalty parameter of the error term
+
+    max_iter: integer, default=-1
+        the maximum number of iteraations to run (to save time)
+        max_iter=-1 means no limit
+        Typically in the 1000s takes a short amount of time on a laptop
+    """
+
+    def __init__(self,max_iter=-1,C=3.0):
+        self.max_iter=max_iter
+        self.C=C
+        return
+
+
+    def fit(self,X_flat_train,y_train):
+
+        """
+        Train SVR Decoder
+
+        Parameters
+        ----------
+        X_flat_train: numpy 2d array of shape [n_samples,n_features]
+            This is the neural data.
+            See example file for an example of how to format the neural data correctly
+
+        y_train: numpy 2d array of shape [n_samples, n_outputs]
+            This is the outputs that are being predicted
+        """
+
+        num_outputs=y_train.shape[1] #Number of outputs
+        models=[] #Initialize list of models (there will be a separate model for each output)
+        for y_idx in range(num_outputs): #Loop through outputs
+            model=SVC(C=self.C, max_iter=self.max_iter) #Initialize SVR model
+            model.fit(X_flat_train, y_train[:,y_idx]) #Train the model
+            models.append(model) #Add fit model to list of models
+        self.model=models
+
+
+    def predict(self,X_flat_test):
+
+        """
+        Predict outcomes using trained SVR Decoder
+
+        Parameters
+        ----------
+        X_flat_test: numpy 2d array of shape [n_samples,n_features]
+            This is the neural data being used to predict outputs.
+
+        Returns
+        -------
+        y_test_predicted: numpy 2d array of shape [n_samples,n_outputs]
+            The predicted outputs
+        """
+
+        num_outputs=len(self.model) #Number of outputs
+        y_test_predicted=np.empty([X_flat_test.shape[0],num_outputs]) #Initialize matrix of predicted outputs
+        for y_idx in range(num_outputs): #Loop through outputs
+            model=self.model[y_idx] #Get fit model for that output
+            y_test_predicted[:,y_idx]=model.predict(X_flat_test) #Make predictions
+        return y_test_predicted
+
 ##################### ALLIASES ##########################
 @register
 def wf(*args, **kwargs):
@@ -333,3 +407,7 @@ def xgb(*args, **kwargs):
 @register
 def svr(*args, **kwargs):
     return SVRegression(*args, **kwargs)
+
+@register
+def svc(*args, **kwargs):
+    return SVClassification(*args, **kwargs)
